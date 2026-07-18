@@ -1,0 +1,351 @@
+@import "tailwindcss";
+
+@plugin "tailwindcss-animate";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --background: oklch(0.985 0.004 304);
+  --foreground: oklch(0.22 0.02 304);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.02 304);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.02 304);
+
+  --primary: oklch(0.447 0.228 304);
+  --primary-hover: oklch(0.407 0.222 304);
+  --primary-foreground: oklch(0.99 0.005 304);
+
+  --secondary: oklch(0.955 0.012 304);
+  --secondary-foreground: oklch(0.32 0.05 304);
+
+  --muted: oklch(0.96 0.008 304);
+  --muted-foreground: oklch(0.5 0.02 304);
+
+  --accent: oklch(0.94 0.035 304);
+  --accent-foreground: oklch(0.34 0.15 304);
+
+  --destructive: oklch(0.577 0.215 27.325);
+  --destructive-foreground: oklch(0.99 0 0);
+
+  --success: oklch(0.6 0.15 155);
+  --success-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.75 0.16 80);
+  --warning-foreground: oklch(0.25 0.05 80);
+
+  --border: oklch(0.9 0.008 304);
+  --input: oklch(0.9 0.008 304);
+  --ring: oklch(0.6 0.19 304);
+
+  --chart-1: oklch(0.55 0.22 304);
+  --chart-2: oklch(0.68 0.14 195);
+  --chart-3: oklch(0.77 0.15 75);
+  --chart-4: oklch(0.65 0.19 20);
+  --chart-5: oklch(0.6 0.17 250);
+
+  --radius: 0.75rem;
+
+  --sidebar: oklch(0.98 0.006 304);
+  --sidebar-foreground: oklch(0.28 0.02 304);
+  --sidebar-primary: oklch(0.447 0.228 304);
+  --sidebar-primary-foreground: oklch(0.99 0.005 304);
+  --sidebar-accent: oklch(0.935 0.038 304);
+  --sidebar-accent-foreground: oklch(0.35 0.16 304);
+  --sidebar-border: oklch(0.91 0.008 304);
+  --sidebar-ring: oklch(0.6 0.19 304);
+
+  --shadow-color: 304 40% 30%;
+  color-scheme: light;
+}
+
+.dark {
+  --background: oklch(0.17 0.014 304);
+  --foreground: oklch(0.95 0.006 304);
+  --card: oklch(0.215 0.016 304);
+  --card-foreground: oklch(0.95 0.006 304);
+  --popover: oklch(0.22 0.017 304);
+  --popover-foreground: oklch(0.95 0.006 304);
+
+  --primary: oklch(0.62 0.21 304);
+  --primary-hover: oklch(0.67 0.2 304);
+  --primary-foreground: oklch(0.13 0.02 304);
+
+  --secondary: oklch(0.28 0.02 304);
+  --secondary-foreground: oklch(0.92 0.012 304);
+
+  --muted: oklch(0.26 0.017 304);
+  --muted-foreground: oklch(0.68 0.02 304);
+
+  --accent: oklch(0.3 0.06 304);
+  --accent-foreground: oklch(0.88 0.08 304);
+
+  --destructive: oklch(0.6 0.2 25);
+  --destructive-foreground: oklch(0.99 0 0);
+
+  --success: oklch(0.65 0.15 155);
+  --success-foreground: oklch(0.12 0.02 155);
+  --warning: oklch(0.78 0.15 80);
+  --warning-foreground: oklch(0.2 0.04 80);
+
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.62 0.21 304);
+
+  --chart-1: oklch(0.65 0.22 304);
+  --chart-2: oklch(0.72 0.14 195);
+  --chart-3: oklch(0.8 0.15 75);
+  --chart-4: oklch(0.7 0.19 20);
+  --chart-5: oklch(0.68 0.17 250);
+
+  --sidebar: oklch(0.14 0.015 304);
+  --sidebar-foreground: oklch(0.9 0.01 304);
+  --sidebar-primary: oklch(0.62 0.21 304);
+  --sidebar-primary-foreground: oklch(0.13 0.02 304);
+  --sidebar-accent: oklch(0.26 0.05 304);
+  --sidebar-accent-foreground: oklch(0.88 0.08 304);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: oklch(0.62 0.21 304);
+
+  --shadow-color: 304 60% 4%;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-sans: var(--font-sans);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 10px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  ::selection {
+    background-color: oklch(from var(--primary) l c h / 25%);
+    color: var(--foreground);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(from var(--foreground) l c h / 18%) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: oklch(from var(--foreground) l c h / 16%);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: oklch(from var(--foreground) l c h / 28%);
+  }
+
+  [data-slot="table-container"] *::-webkit-scrollbar {
+    height: 9px;
+  }
+}
+
+@layer utilities {
+  .shadow-elegant-sm {
+    box-shadow:
+      0 1px 2px 0 hsl(var(--shadow-color) / 0.06),
+      0 1px 1px -1px hsl(var(--shadow-color) / 0.06);
+  }
+
+  .shadow-elegant {
+    box-shadow:
+      0 1px 2px 0 hsl(var(--shadow-color) / 0.05),
+      0 6px 16px -4px hsl(var(--shadow-color) / 0.1);
+  }
+
+  .shadow-elegant-lg {
+    box-shadow:
+      0 2px 4px 0 hsl(var(--shadow-color) / 0.05),
+      0 16px 40px -8px hsl(var(--shadow-color) / 0.16);
+  }
+
+  .bg-noise {
+    background-image: radial-gradient(oklch(from var(--primary) l c h / 6%) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+}
+
+.react-datepicker {
+  font-family: var(--font-sans) !important;
+  background-color: var(--popover) !important;
+  color: var(--popover-foreground) !important;
+  border-color: var(--border) !important;
+  border-radius: var(--radius-md) !important;
+}
+
+.react-datepicker__header {
+  background-color: var(--muted) !important;
+  border-color: var(--border) !important;
+}
+
+.react-datepicker__current-month,
+.react-datepicker__day-name,
+.react-datepicker__day {
+  color: var(--foreground) !important;
+}
+
+.react-datepicker__day:hover {
+  background-color: var(--accent) !important;
+  color: var(--accent-foreground) !important;
+}
+
+.react-datepicker__day--selected,
+.react-datepicker__day--in-range,
+.react-datepicker__day--in-selecting-range,
+.react-datepicker__day--keyboard-selected {
+  background-color: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+}
+
+.react-datepicker__day--disabled {
+  color: var(--muted-foreground) !important;
+  opacity: 0.5;
+}
+
+.react-datepicker__triangle {
+  fill: var(--popover) !important;
+  color: var(--popover) !important;
+  stroke: var(--border) !important;
+}
+
+.react-datepicker__navigation-icon::before {
+  border-color: var(--muted-foreground) !important;
+}
+
+.react-select__control {
+  background-color: var(--background) !important;
+  border-color: var(--input) !important;
+  border-radius: var(--radius-md) !important;
+  min-height: 2.25rem !important;
+  box-shadow: none !important;
+}
+
+.react-select__control--is-focused {
+  border-color: var(--ring) !important;
+  box-shadow: 0 0 0 3px oklch(from var(--ring) l c h / 50%) !important;
+}
+
+.react-select__menu {
+  background-color: var(--popover) !important;
+  color: var(--popover-foreground) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  overflow: hidden;
+  z-index: 50;
+}
+
+.react-select__option {
+  background-color: transparent !important;
+  color: var(--popover-foreground) !important;
+  cursor: pointer;
+}
+
+.react-select__option--is-focused {
+  background-color: var(--accent) !important;
+  color: var(--accent-foreground) !important;
+}
+
+.react-select__option--is-selected {
+  background-color: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+}
+
+.react-select__single-value,
+.react-select__input-container {
+  color: var(--foreground) !important;
+}
+
+.react-select__placeholder {
+  color: var(--muted-foreground) !important;
+}
+
+.react-select__multi-value {
+  background-color: var(--accent) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+.react-select__multi-value__label {
+  color: var(--accent-foreground) !important;
+}
+
+.react-select__multi-value__remove:hover {
+  background-color: var(--destructive) !important;
+  color: var(--destructive-foreground) !important;
+}
+
+.react-select__indicator-separator {
+  background-color: var(--border) !important;
+}
+
+.react-select__dropdown-indicator,
+.react-select__clear-indicator {
+  color: var(--muted-foreground) !important;
+}
