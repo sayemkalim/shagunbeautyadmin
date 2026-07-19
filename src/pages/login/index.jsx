@@ -1,13 +1,13 @@
 import { LoginForm } from "@/components/login-form";
-import celiacLogo from "@/assets/celiac_logo.png";
+import logo from "@/assets/shagun_beauty_logo.png";
 
 const Login = () => {
   return (
     <div className="grid min-h-svh lg:grid-cols-2">
       <div className="flex flex-col gap-4 p-6 md:p-10">
         <div className="flex items-center gap-2 lg:hidden">
-          <img src={celiacLogo} alt="The Celiac Store" className="h-8 w-auto object-contain" />
-          <span className="font-semibold tracking-tight">The Celiac Store</span>
+          <img src={logo} alt="Shagun Beauty" className="h-8 w-auto object-contain" />
+          <span className="font-semibold tracking-tight">Shagun Beauty</span>
         </div>
         <div className="flex flex-1 items-center justify-center">
           <div className="w-full max-w-sm">
@@ -15,7 +15,7 @@ const Login = () => {
               <LoginForm />
             </div>
             <p className="text-muted-foreground mt-6 text-center text-xs">
-              &copy; {new Date().getFullYear()} The Celiac Store. All rights reserved.
+              &copy; {new Date().getFullYear()} Shagun Beauty. All rights reserved.
             </p>
           </div>
         </div>
@@ -34,8 +34,8 @@ const Login = () => {
         <div className="relative z-10 flex flex-col items-center gap-8 px-12 text-center">
           <div className="rounded-3xl bg-white/10 p-8 backdrop-blur-sm ring-1 ring-white/20">
             <img
-              src={celiacLogo}
-              alt="Celiac Logo"
+              src={logo}
+              alt="Shagun Beauty Logo"
               className="max-h-40 max-w-64 object-contain drop-shadow-xl"
             />
           </div>
@@ -45,7 +45,7 @@ const Login = () => {
             </h2>
             <p className="text-sm text-white/70">
               Manage products, orders, and customers from a single, focused admin
-              workspace built for The Celiac Store team.
+              workspace built for the Shagun Beauty team.
             </p>
           </div>
         </div>

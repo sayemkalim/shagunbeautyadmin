@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Layers } from "lucide-react";
 import { useState } from "react";
 import Typography from "@/components/typography";
 import { fetchProductById } from "../helpers/fetchProductById";
@@ -104,6 +104,12 @@ const ProductDetails = () => {
             {product.is_best_seller && (
               <Badge variant="secondary">Best Seller</Badge>
             )}
+            {Array.isArray(product.price_tiers) && product.price_tiers.length > 0 && (
+              <Badge variant="secondary" className="gap-1">
+                <Layers size={12} />
+                {product.price_tiers.length} pack size{product.price_tiers.length > 1 ? "s" : ""}
+              </Badge>
+            )}
             {/* <Badge variant={product.instock ? "default" : "destructive"}>
   {product.instock ? "In Stock" : "Out of Stock"}
 </Badge> */}
@@ -123,6 +129,41 @@ const ProductDetails = () => {
               </span>
             )}
           </div>
+
+          {Array.isArray(product.price_tiers) && product.price_tiers.length > 0 && (
+            <div className="bg-muted/30 space-y-2 rounded-lg border p-4">
+              <div className="flex items-center gap-2">
+                <Layers size={16} className="text-primary" />
+                <h4 className="text-foreground text-sm font-semibold">Bulk Pricing</h4>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-muted-foreground text-left">
+                    <th className="pb-1 font-medium">Buy Quantity</th>
+                    <th className="pb-1 font-medium">Price Per Unit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="text-muted-foreground">
+                    <td className="py-0.5">1 (standard)</td>
+                    <td className="py-0.5">₹{product.discounted_price ?? product.price}</td>
+                  </tr>
+                  {product.price_tiers
+                    .slice()
+                    .sort((a, b) => a.quantity - b.quantity)
+                    .map((tier) => (
+                      <tr key={tier._id || tier.quantity} className="text-foreground">
+                        <td className="py-0.5 font-medium">{tier.quantity}</td>
+                        <td className="py-0.5 font-medium">₹{tier.price}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+              <p className="text-muted-foreground text-xs">
+                Customers can only order these exact quantities for this product.
+              </p>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
           {Array.isArray(product.tags) && product.tags.length > 0 && (

@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ArrowLeft, Plus, Minus, Save, Trash2, Mail, CreditCard, Edit, Package, Truck, DollarSign, Eye, EyeOff, Copy } from "lucide-react";
+import { ArrowLeft, Plus, Minus, Save, Trash2, Mail, CreditCard, Edit, Package, Truck, DollarSign, Eye, EyeOff, Copy, Layers } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -86,18 +86,41 @@ const OrderDetails = () => {
     queryFn: () => fetchBundle({ params: { page: 1, per_page: 1000, is_active: true } }),
   });
 
+  // Lookup map of the freshest product data (incl. price_tiers) by product id,
+  // sourced from the product API rather than the order's (possibly stale) populated snapshot.
+  const productsById = useMemo(() => {
+    const map = {};
+    (productsResponse?.data || []).forEach((product) => {
+      map[product._id] = product;
+    });
+    return map;
+  }, [productsResponse]);
+
+  // Returns the allowed quantities for a product ([1, ...tier quantities]) or null if unrestricted.
+  const getAllowedQuantities = (productId) => {
+    const tiers = productsById[productId]?.price_tiers;
+    if (!Array.isArray(tiers) || tiers.length === 0) return null;
+    return [1, ...tiers.map((t) => t.quantity).sort((a, b) => a - b)];
+  };
+
   // Update order mutation using real API
   const { mutate: updateOrderMutation, isLoading: isUpdating } = useMutation({
     mutationFn: (updateData) => updateOrder(updateData),
-    onSuccess: () => {
+    onSuccess: (res) => {
+      // apiService never throws on API errors — it resolves with an
+      // error-shaped object instead, so success must be checked explicitly.
+      if (res?.error || res?.response?.success === false) {
+        toast.error(res?.response?.data?.message || "Failed to update order. Please try again.");
+        return;
+      }
       toast.success("Order updated successfully.");
       setHasChanges(false);
       setStatusChanged(false);
       // Refetch the order data to get the latest state
       refetchOrderData();
     },
-    onError: () => {
-      toast.error("Failed to update order. Please try again.");
+    onError: (error) => {
+      toast.error(error?.response?.data?.message || "Failed to update order. Please try again.");
     },
   });
 
@@ -909,6 +932,12 @@ const OrderDetails = () => {
                               >
                                 {product.name} - ₹{product.discounted_price || product.price}
                                 {product.sku && <span className="text-muted-foreground ml-2">({product.sku})</span>}
+                                {Array.isArray(product.price_tiers) && product.price_tiers.length > 0 && (
+                                  <Badge variant="secondary" className="ml-2 gap-1 align-middle">
+                                    <Layers className="h-3 w-3" />
+                                    Bulk pricing
+                                  </Badge>
+                                )}
                               </label>
                             </div>
                           ))
@@ -974,19 +1003,41 @@ const OrderDetails = () => {
                         <div className="space-y-2">
                           {selectedProducts.map(productId => {
                             const product = productsResponse?.data?.find(p => p._id === productId);
+                            const allowedQuantities = getAllowedQuantities(productId);
                             return (
-                              <div key={productId} className="flex items-center justify-between">
+                              <div key={productId} className="flex items-center justify-between gap-2">
                                 <Typography variant="small">{product?.name}</Typography>
-                                <Input
-                                  type="number"
-                                  min="1"
-                                  value={newItemQuantities[productId] || 1}
-                                  onChange={(e) => setNewItemQuantities(prev => ({
-                                    ...prev,
-                                    [productId]: parseInt(e.target.value) || 1
-                                  }))}
-                                  className="w-20"
-                                />
+                                {allowedQuantities ? (
+                                  <Select
+                                    value={String(newItemQuantities[productId] || 1)}
+                                    onValueChange={(val) => setNewItemQuantities(prev => ({
+                                      ...prev,
+                                      [productId]: parseInt(val, 10)
+                                    }))}
+                                  >
+                                    <SelectTrigger className="w-20">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {allowedQuantities.map((qty) => (
+                                        <SelectItem key={qty} value={String(qty)}>
+                                          {qty}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    value={newItemQuantities[productId] || 1}
+                                    onChange={(e) => setNewItemQuantities(prev => ({
+                                      ...prev,
+                                      [productId]: parseInt(e.target.value) || 1
+                                    }))}
+                                    className="w-20"
+                                  />
+                                )}
                               </div>
                             );
                           })}
@@ -1046,7 +1097,9 @@ const OrderDetails = () => {
                   
                   const itemPrice = isProduct ? (item.product?.discounted_price || item.product?.price || 0) :
                                  isBundle ? (item.bundle?.discounted_price || item.bundle?.price || 0) : 0;
-                  
+
+                  const allowedQuantities = isProduct ? getAllowedQuantities(item.product?._id) : null;
+
                   return (
                     <div key={index} className="flex items-center gap-4 p-4 border rounded-lg">
                       <div className="flex-1">
@@ -1055,37 +1108,63 @@ const OrderDetails = () => {
                           <Badge variant={isProduct ? "default" : "secondary"}>
                             {isProduct ? "Product" : "Bundle"}
                           </Badge>
+                          {allowedQuantities && (
+                            <Badge variant="secondary" className="gap-1">
+                              <Layers className="h-3 w-3" />
+                              Bulk pricing
+                            </Badge>
+                          )}
                         </div>
                         <Typography variant="small" className="text-muted-foreground">
                           {isProduct && item.product?.sku ? `SKU: ${item.product.sku} • ` : ''}₹{itemPrice.toFixed(2)} each
                         </Typography>
                       </div>
-                      
+
                       <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => updateItemQuantity(index, item.quantity - 1)}
-                          disabled={item.quantity <= 1}
-                        >
-                          <Minus className="h-4 w-4" />
-                        </Button>
-                        
-                        <Input
-                          type="number"
-                          value={item.quantity}
-                          onChange={(e) => updateItemQuantity(index, parseInt(e.target.value) || 1)}
-                          className="w-20 text-center"
-                          min="1"
-                        />
-                        
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => updateItemQuantity(index, item.quantity + 1)}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
+                        {allowedQuantities ? (
+                          <Select
+                            value={String(item.quantity)}
+                            onValueChange={(val) => updateItemQuantity(index, parseInt(val, 10))}
+                          >
+                            <SelectTrigger className="w-24">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {allowedQuantities.map((qty) => (
+                                <SelectItem key={qty} value={String(qty)}>
+                                  {qty}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => updateItemQuantity(index, item.quantity - 1)}
+                              disabled={item.quantity <= 1}
+                            >
+                              <Minus className="h-4 w-4" />
+                            </Button>
+
+                            <Input
+                              type="number"
+                              value={item.quantity}
+                              onChange={(e) => updateItemQuantity(index, parseInt(e.target.value) || 1)}
+                              className="w-20 text-center"
+                              min="1"
+                            />
+
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => updateItemQuantity(index, item.quantity + 1)}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
                       </div>
                       
                       <Typography variant="p" className="font-medium w-24 text-right">

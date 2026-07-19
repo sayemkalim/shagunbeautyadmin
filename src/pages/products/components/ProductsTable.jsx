@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, formatDistanceToNow } from "date-fns";
 import ActionMenu from "@/components/action_menu";
-import { Eye, Pencil, Trash2, Loader2, CheckCircle, XCircle, X, IndianRupee, ChevronUp, ChevronDown } from "lucide-react";
+import { Eye, Pencil, Trash2, Loader2, CheckCircle, XCircle, X, IndianRupee, ChevronUp, ChevronDown, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import CustomTable from "@/components/custom_table";
 import Typography from "@/components/typography";
 import { CustomDialog } from "@/components/custom_dialog";
@@ -349,6 +350,19 @@ const ProductsTable = ({ setProductLength, params, setParams }) => {
       key: "discounted_price",
       label: "Discounted Price",
       render: (value) => `₹${value?.$numberDecimal || value || ""}`,
+    },
+    {
+      key: "price_tiers",
+      label: "Bulk Pricing",
+      render: (value) =>
+        Array.isArray(value) && value.length > 0 ? (
+          <Badge variant="secondary" className="gap-1">
+            <Layers size={12} />
+            {value.length} pack size{value.length > 1 ? "s" : ""}
+          </Badge>
+        ) : (
+          <span className="text-muted-foreground text-xs">—</span>
+        ),
     },
     {
       key: "status",

@@ -33,7 +33,7 @@ export function TeamSwitcher() {
             )}
           </div>
           <div className="grid flex-1 text-left text-sm leading-tight">
-            <span className="truncate font-semibold">The Celiac Store</span>
+            <span className="truncate font-semibold">Shagun Beauty</span>
             <span className="truncate text-xs text-sidebar-foreground/60">
               {isSuperAdmin ? "Super Admin" : "Admin"}
             </span>

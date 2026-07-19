@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Select from "react-select";
-import { XCircle, Loader2, Sparkles } from "lucide-react";
+import { XCircle, Loader2, Sparkles, PlusCircle, Info } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,6 +45,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
     saleprice: "",
     sku: "",
     weight_in_grams: "",
+    inventory: 1,
     images: [],
     imagePreviews: [],
     bannerImage: null,
@@ -66,8 +67,75 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
         imagePreview: null,
       },
     ],
+    priceTiers: [],
   });
-  
+
+  const [priceTierErrors, setPriceTierErrors] = useState({});
+
+  const addPriceTier = () => {
+    setFormData((prev) => ({
+      ...prev,
+      priceTiers: [...prev.priceTiers, { quantity: "", price: "" }],
+    }));
+  };
+
+  const removePriceTier = (index) => {
+    setFormData((prev) => {
+      const priceTiers = [...prev.priceTiers];
+      priceTiers.splice(index, 1);
+      return { ...prev, priceTiers };
+    });
+    setPriceTierErrors((prev) => {
+      const next = { ...prev };
+      delete next[index];
+      return next;
+    });
+  };
+
+  const handlePriceTierChange = (index, field, value) => {
+    setFormData((prev) => {
+      const priceTiers = [...prev.priceTiers];
+      priceTiers[index] = { ...priceTiers[index], [field]: value };
+      return { ...prev, priceTiers };
+    });
+  };
+
+  // Validate tier rows; returns { valid: [{quantity:number, price:number}], errors: {index: message} }
+  const validatePriceTiers = (tiers) => {
+    const errors = {};
+    const seenQuantities = new Map();
+    const valid = [];
+
+    tiers.forEach((tier, index) => {
+      const quantityStr = String(tier.quantity ?? "").trim();
+      const priceStr = String(tier.price ?? "").trim();
+
+      // Skip fully empty rows silently (not counted as an error)
+      if (!quantityStr && !priceStr) return;
+
+      const quantityNum = Number(quantityStr);
+      const priceNum = Number(priceStr);
+
+      if (!quantityStr || !Number.isInteger(quantityNum) || quantityNum < 2) {
+        errors[index] = "Quantity must be a whole number of 2 or more";
+        return;
+      }
+      if (seenQuantities.has(quantityNum)) {
+        errors[index] = "Duplicate quantity — each tier needs a unique quantity";
+        return;
+      }
+      if (!priceStr || isNaN(priceNum) || priceNum < 0) {
+        errors[index] = "Price must be a number of 0 or more";
+        return;
+      }
+
+      seenQuantities.set(quantityNum, true);
+      valid.push({ quantity: quantityNum, price: priceNum });
+    });
+
+    return { valid, errors };
+  };
+
   const addVariant = () => {
     setFormData((prev) => ({
       ...prev,
@@ -168,6 +236,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
         saleprice: initialData.discounted_price || "",
         sku: initialData.sku || "",
         weight_in_grams: initialData.weight_in_grams || "",
+        inventory: initialData.inventory ?? 1,
         images: [],
         imagePreviews: Array.isArray(initialData.images)
           ? initialData.images.map((imgUrl) => ({
@@ -205,7 +274,14 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
                 imagePreview: null,
               },
             ],
+        priceTiers: Array.isArray(initialData.price_tiers)
+          ? initialData.price_tiers.map((tier) => ({
+              quantity: tier.quantity ?? "",
+              price: tier.price ?? "",
+            }))
+          : [],
       });
+      setPriceTierErrors({});
     }
   }, [initialData, isEditMode]);
   
@@ -286,12 +362,21 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
   // Submit handler
   const handleSubmit = () => {
     const userId = getItem("userId");
-  
+
     if (!userId) {
       toast.error("User ID not found. Please log in again.");
       return;
     }
-  
+
+    // Bulk pricing (price tiers) — validate before submit
+    const { valid: validPriceTiers, errors: tierErrors } = validatePriceTiers(formData.priceTiers);
+    if (Object.keys(tierErrors).length > 0) {
+      setPriceTierErrors(tierErrors);
+      toast.error("Please fix the bulk pricing errors before saving");
+      return;
+    }
+    setPriceTierErrors({});
+
     const form = new FormData();
     form.append("name", formData.name);
     form.append("sku", formData.sku);
@@ -299,6 +384,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
     form.append("price", formData.price);
     form.append("discounted_price", formData.saleprice);
     form.append("weight_in_grams", formData.weight_in_grams);
+    form.append("inventory", formData.inventory);
     form.append("sub_category", formData.sub_category);
     form.append("brand", formData.brand);
     form.append("user_id", userId);
@@ -343,8 +429,11 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
         });
       }
     });
-    
-  
+
+    // Bulk pricing — sent as a JSON-stringified array (per backend contract).
+    // Always included: an empty array explicitly clears existing tiers on update.
+    form.append("price_tiers", JSON.stringify(validPriceTiers));
+
     // Submit
     if (isEditMode) {
       editMutation.mutate({ id: initialData._id, payload: form });
@@ -459,6 +548,19 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
             value={formData.saleprice}
             onChange={handleChange}
             placeholder="Discounted Price"
+          />
+        </div>
+
+        {/* Inventory */}
+        <div className="space-y-2">
+          <Label>Inventory</Label>
+          <Input
+            type="number"
+            name="inventory"
+            value={formData.inventory}
+            onChange={handleChange}
+            placeholder="1"
+            min="0"
           />
         </div>
         </div>
@@ -753,6 +855,96 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
           ))}
           <Button onClick={addVariant} type="button" variant="outline">
             + Add Variant
+          </Button>
+        </div>
+
+        <div className="space-y-4">
+          <div className="border-border flex flex-wrap items-end justify-between gap-2 border-b pb-2">
+            <div>
+              <Typography variant="h6" className="text-foreground font-semibold">
+                Bulk Pricing
+              </Typography>
+              <p className="text-muted-foreground mt-1 flex items-start gap-1.5 text-xs">
+                <Info size={14} className="mt-0.5 shrink-0" />
+                Reward customers for buying more. Leave empty for standard flat pricing —
+                tiers are optional and off by default.
+              </p>
+            </div>
+          </div>
+
+          {formData.priceTiers.length > 0 && (
+            <div className="space-y-3">
+              {formData.priceTiers.map((tier, index) => (
+                <div
+                  key={index}
+                  className="border-border bg-muted/20 relative space-y-2 rounded-xl border p-4"
+                >
+                  <div className="flex flex-wrap items-end gap-4">
+                    <div className="flex min-w-[9rem] flex-1 flex-col">
+                      <Label htmlFor={`tier-quantity-${index}`} className="mb-1">
+                        Buy Quantity
+                      </Label>
+                      <Input
+                        id={`tier-quantity-${index}`}
+                        type="number"
+                        min="2"
+                        step="1"
+                        placeholder="e.g. 4"
+                        value={tier.quantity}
+                        onChange={(e) => {
+                          handlePriceTierChange(index, "quantity", e.target.value);
+                          setPriceTierErrors((prev) => {
+                            const next = { ...prev };
+                            delete next[index];
+                            return next;
+                          });
+                        }}
+                      />
+                    </div>
+
+                    <div className="flex min-w-[9rem] flex-1 flex-col">
+                      <Label htmlFor={`tier-price-${index}`} className="mb-1">
+                        Price Per Unit (₹)
+                      </Label>
+                      <Input
+                        id={`tier-price-${index}`}
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="e.g. 410"
+                        value={tier.price}
+                        onChange={(e) => {
+                          handlePriceTierChange(index, "price", e.target.value);
+                          setPriceTierErrors((prev) => {
+                            const next = { ...prev };
+                            delete next[index];
+                            return next;
+                          });
+                        }}
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => removePriceTier(index)}
+                      className="text-muted-foreground hover:text-destructive mb-2 transition-colors"
+                      title="Remove Tier"
+                    >
+                      <XCircle size={20} />
+                    </button>
+                  </div>
+
+                  {priceTierErrors[index] && (
+                    <p className="text-destructive text-xs">{priceTierErrors[index]}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <Button onClick={addPriceTier} type="button" variant="outline" className="gap-2">
+            <PlusCircle size={16} />
+            Add Price Tier
           </Button>
         </div>
 
