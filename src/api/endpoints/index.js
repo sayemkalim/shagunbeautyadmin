@@ -38,4 +38,6 @@ export const endpoints = {
   monthly_growth: "api/dashboard/monthly-growth",
   revenue_trend: "api/dashboard/revenue-trend",
   category_distribution: "api/dashboard/category-distribution",
+  //inventory
+  inventory: "api/inventory",
 };

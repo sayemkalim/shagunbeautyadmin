@@ -23,7 +23,7 @@ export function AppSidebar({ ...props }) {
 
   useEffect(() => {
     const storedRole = getItem("userRole");
-    if (storedRole === "super_admin" || storedRole === "admin") {
+    if (storedRole === "super_admin" || storedRole === "admin" || storedRole === "sub_admin") {
       setRole(storedRole);
     }
   }, []);

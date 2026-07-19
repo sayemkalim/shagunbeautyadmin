@@ -126,8 +126,16 @@ export const data = {
       items: [],
       roles: ["super_admin", "admin"],
     },
-    
-    
+    {
+      title: "Inventory",
+      url: "/dashboard/inventory",
+      icon: Package,
+      isActive: true,
+      items: [],
+      roles: ["super_admin", "admin", "sub_admin"],
+    },
+
+
   ],
   projects: [
     {

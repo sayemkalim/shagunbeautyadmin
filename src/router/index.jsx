@@ -38,6 +38,9 @@ import SuperAdmin from "@/pages/super-admin";
 import AddSuperAdminCard from "@/pages/super-admin/components/AddAdminCard";
 import SuperAdminEditorCard from "@/pages/super-admin/components/super-admin_editor/AdminEditorCard";
 import SuperEditor from "@/pages/super-admin/components/super-admin_editor";
+import Inventory from "@/pages/inventory";
+import InventoryDetails from "@/pages/inventory/components/inventory_details";
+import StockHistory from "@/pages/inventory/components/stock_history";
 
 const Router = () => {
   return (
@@ -115,6 +118,10 @@ const Router = () => {
           <Route path="/dashboard/shipment-zones/add" element={<ShipmentZoneEditor />} />
           <Route path="/dashboard/shipment-zones/edit/:id" element={<ShipmentZoneEditor />} />
           <Route path="/dashboard/shipment-zones/:id" element={<ShipmentZoneDetails />} />
+          {/* Inventory Routes */}
+          <Route path="/dashboard/inventory" element={<Inventory />} />
+          <Route path="/dashboard/inventory/stock-history" element={<StockHistory />} />
+          <Route path="/dashboard/inventory/:sku" element={<InventoryDetails />} />
         </Route>
       </Route>
       <Route path="*" element={<ErrorPage />} />
