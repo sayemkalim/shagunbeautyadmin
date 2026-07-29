@@ -40,4 +40,8 @@ export const endpoints = {
   category_distribution: "api/dashboard/category-distribution",
   //inventory
   inventory: "api/inventory",
+  //coupon
+  coupon: "api/coupon",
+  //banner
+  banner: "api/banner",
 };

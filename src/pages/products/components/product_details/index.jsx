@@ -245,6 +245,14 @@ const ProductDetails = () => {
 
           <p className="text-sm text-muted-foreground mb-1">SKU: {variant.sku}</p>
 
+          {(variant.color || variant.weight_in_grams) && (
+            <p className="text-sm text-muted-foreground mb-1">
+              {variant.color && <>Color: {variant.color}</>}
+              {variant.color && variant.weight_in_grams ? " • " : ""}
+              {variant.weight_in_grams && <>Weight: {variant.weight_in_grams}g</>}
+            </p>
+          )}
+
           <div className="flex items-center gap-2 text-base">
             <span className="text-primary font-semibold">
               ₹{variant.discounted_price}

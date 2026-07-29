@@ -24,6 +24,7 @@ const CustomActionMenu = ({
   handleSearch,
   disableAdd = false,
   disableBulkUpload = true,
+  disableSearch = false,
   searchText,
   setOpenDialog,
   showDateRangePicker = false,
@@ -47,12 +48,14 @@ const CustomActionMenu = ({
         </Typography>
       </div>
       <div className="flex flex-wrap items-center gap-2 md:gap-3">
-        <Input
-          placeholder="Search"
-          className={`min-w-[150px] ${disableBulkUpload ? "w-80" : "w-48"}`}
-          value={searchText}
-          onChange={handleSearch}
-        />
+        {!disableSearch && (
+          <Input
+            placeholder="Search"
+            className={`min-w-[150px] ${disableBulkUpload ? "w-80" : "w-48"}`}
+            value={searchText}
+            onChange={handleSearch}
+          />
+        )}
 
         {hasFilters && (
           <Sheet>

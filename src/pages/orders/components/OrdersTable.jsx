@@ -127,12 +127,26 @@ const OrdersTable = ({
       label: "Order ID",
       render: (_, row) => (
         <div className="flex flex-col gap-1">
-          <Typography
-            variant="p"
-            className="text-primary font-mono font-medium"
-          >
-            {row?.orderNumber ? `#${row.orderNumber}` : row?._id}
-          </Typography>
+          <div className="flex items-center gap-1.5">
+            <Typography
+              variant="p"
+              className="text-primary font-mono font-medium"
+            >
+              {row?.orderNumber ? `#${row.orderNumber}` : row?._id}
+            </Typography>
+            {row?.couponCode && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="outline" className="cursor-default px-1.5 py-0 text-[10px]">
+                    {row.couponCode}
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  −₹{(row.couponDiscountAmount || 0).toFixed(2)} discount applied
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
         </div>
       ),
     },
@@ -220,12 +234,19 @@ const OrdersTable = ({
       label: "Status",
       render: (status, row) => (
         <div className="flex flex-col gap-1">
-          <Badge
-            className={cn("w-fit cursor-pointer capitalize", getStatusBadgeClass(status))}
-            onClick={() => onOpenStatusDialog(row)}
-          >
-            {status}
-          </Badge>
+          <div className="flex items-center gap-1.5">
+            <Badge
+              className={cn("w-fit cursor-pointer capitalize", getStatusBadgeClass(status))}
+              onClick={() => onOpenStatusDialog(row)}
+            >
+              {status}
+            </Badge>
+            {row?.paymentMode && (
+              <Badge variant="outline" className="w-fit">
+                {row.paymentMode}
+              </Badge>
+            )}
+          </div>
         </div>
       ),
     },

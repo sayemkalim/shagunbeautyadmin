@@ -27,7 +27,8 @@ import {
   LayoutGridIcon,
   CreditCard,
   Mail,
-  Truck
+  Truck,
+  Ticket
 } from "lucide-react";
 import { getItem } from "../local_storage";
 const userName = getItem("userName") || "Admin";
@@ -127,6 +128,14 @@ export const data = {
       roles: ["super_admin", "admin"],
     },
     {
+      title: "Banners",
+      url: "/dashboard/banners",
+      icon: Image,
+      isActive: true,
+      items: [],
+      roles: ["super_admin", "admin"],
+    },
+    {
       title: "Inventory",
       url: "/dashboard/inventory",
       icon: Package,
@@ -197,6 +206,13 @@ export const data = {
       name: "Orders",
       url: "/dashboard/orders",
       icon: Package2,
+      roles: ["super_admin","admin"],
+    },
+    {
+      title: "Coupons",
+      name: "Coupons",
+      url: "/dashboard/coupons",
+      icon: Ticket,
       roles: ["super_admin","admin"],
     },
     // {

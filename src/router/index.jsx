@@ -34,6 +34,10 @@ import UserDetails from "@/pages/users/components/user_details";
 import ShipmentZones from "@/pages/shipment_zones";
 import ShipmentZoneEditor from "@/pages/shipment_zones/components/shipment_zone_editor";
 import ShipmentZoneDetails from "@/pages/shipment_zones/components/ShipmentZoneDetails";
+import Coupons from "@/pages/coupons";
+import CouponEditor from "@/pages/coupons/components/coupon_editor";
+import Banners from "@/pages/banners";
+import BannerEditor from "@/pages/banners/components/banner_editor";
 import SuperAdmin from "@/pages/super-admin";
 import AddSuperAdminCard from "@/pages/super-admin/components/AddAdminCard";
 import SuperAdminEditorCard from "@/pages/super-admin/components/super-admin_editor/AdminEditorCard";
@@ -118,6 +122,14 @@ const Router = () => {
           <Route path="/dashboard/shipment-zones/add" element={<ShipmentZoneEditor />} />
           <Route path="/dashboard/shipment-zones/edit/:id" element={<ShipmentZoneEditor />} />
           <Route path="/dashboard/shipment-zones/:id" element={<ShipmentZoneDetails />} />
+          {/* Coupons Routes */}
+          <Route path="/dashboard/coupons" element={<Coupons />} />
+          <Route path="/dashboard/coupons/add" element={<CouponEditor />} />
+          <Route path="/dashboard/coupons/edit/:id" element={<CouponEditor />} />
+          {/* Banners Routes */}
+          <Route path="/dashboard/banners" element={<Banners />} />
+          <Route path="/dashboard/banners/add" element={<BannerEditor />} />
+          <Route path="/dashboard/banners/edit/:id" element={<BannerEditor />} />
           {/* Inventory Routes */}
           <Route path="/dashboard/inventory" element={<Inventory />} />
           <Route path="/dashboard/inventory/stock-history" element={<StockHistory />} />

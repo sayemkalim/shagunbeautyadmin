@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import Typography from "@/components/typography";
 import NavbarItem from "@/components/navbar/navbar_item";
+import ColorPickerInput from "@/components/color_picker_input";
 
 import { getItem } from "@/utils/local_storage";
 import { updateProduct } from "../helpers/updateProduct";
@@ -45,6 +46,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
     saleprice: "",
     sku: "",
     weight_in_grams: "",
+    color: "",
     inventory: 1,
     images: [],
     imagePreviews: [],
@@ -63,6 +65,8 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
         price: "",
         discounted_price: "",
         inventory: "",
+        color: "",
+        weight_in_grams: "",
         image: null,
         imagePreview: null,
       },
@@ -147,13 +151,15 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
           price: "",
           discounted_price: "",
           inventory: "",
+          color: "",
+          weight_in_grams: "",
           image: null,
           imagePreview: null,
         },
       ],
     }));
   };
-  
+
   const removeVariant = (index) => {
     setFormData((prev) => {
       const newVariants = [...prev.variants];
@@ -236,6 +242,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
         saleprice: initialData.discounted_price || "",
         sku: initialData.sku || "",
         weight_in_grams: initialData.weight_in_grams || "",
+        color: initialData.color || "",
         inventory: initialData.inventory ?? 1,
         images: [],
         imagePreviews: Array.isArray(initialData.images)
@@ -260,6 +267,8 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
               price: v.price || "",
               discounted_price: v.discounted_price || "",
               inventory: v.inventory || "",
+              color: v.color || "",
+              weight_in_grams: v.weight_in_grams || "",
               image: null,
               imagePreview: null,
             }))
@@ -270,6 +279,8 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
                 price: "",
                 discounted_price: "",
                 inventory: "",
+                color: "",
+                weight_in_grams: "",
                 image: null,
                 imagePreview: null,
               },
@@ -384,6 +395,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
     form.append("price", formData.price);
     form.append("discounted_price", formData.saleprice);
     form.append("weight_in_grams", formData.weight_in_grams);
+    form.append("color", formData.color);
     form.append("inventory", formData.inventory);
     form.append("sub_category", formData.sub_category);
     form.append("brand", formData.brand);
@@ -419,7 +431,9 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
       form.append(`variants[${i}][price]`, variant.price);
       form.append(`variants[${i}][discounted_price]`, variant.discounted_price);
       form.append(`variants[${i}][inventory]`, variant.inventory);
-    
+      form.append(`variants[${i}][color]`, variant.color);
+      form.append(`variants[${i}][weight_in_grams]`, variant.weight_in_grams);
+
       // Append images for this variant
       if (variant.images && variant.images.length > 0) {
         variant.images.forEach((imageFile) => {
@@ -495,6 +509,15 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
             onChange={handleChange}
             placeholder="Product weight in grams"
             min="0"
+          />
+        </div>
+
+        {/* Color */}
+        <div className="space-y-2">
+          <Label>Color</Label>
+          <ColorPickerInput
+            value={formData.color}
+            onChange={(value) => setFormData((prev) => ({ ...prev, color: value }))}
           />
         </div>
 
@@ -838,6 +861,29 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
                     accept="image/*"
                     onChange={(e) => handleVariantImageChange(index, e.target.files[0])}
                     className="cursor-pointer"
+                  />
+                </div>
+
+                <div className="flex flex-col">
+                  <Label htmlFor={`color-${index}`} className="mb-1">Color</Label>
+                  <ColorPickerInput
+                    id={`color-${index}`}
+                    value={variant.color}
+                    onChange={(value) => handleVariantChange(index, "color", value)}
+                  />
+                </div>
+
+                <div className="flex flex-col">
+                  <Label htmlFor={`weight-${index}`} className="mb-1">Weight (in grams)</Label>
+                  <Input
+                    id={`weight-${index}`}
+                    type="number"
+                    value={variant.weight_in_grams}
+                    onChange={(e) =>
+                      handleVariantChange(index, "weight_in_grams", e.target.value)
+                    }
+                    placeholder="Variant weight in grams"
+                    min="0"
                   />
                 </div>
               </div>

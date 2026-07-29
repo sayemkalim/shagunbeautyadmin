@@ -654,19 +654,24 @@ const OrderDetails = () => {
             </div>
             <div>
               <Typography variant="small" className="text-muted-foreground">Status</Typography>
-              <Badge
-                variant={
-                  order.status === "delivered"
-                    ? "success"
-                    : order.status === "cancelled"
-                    ? "destructive"
-                    : order.status === "pending"
-                    ? "outline"
-                    : "secondary"
-                }
-              >
-                {order.status?.toUpperCase() || 'UNKNOWN'}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge
+                  variant={
+                    order.status === "delivered"
+                      ? "success"
+                      : order.status === "cancelled"
+                      ? "destructive"
+                      : order.status === "pending"
+                      ? "outline"
+                      : "secondary"
+                  }
+                >
+                  {order.status?.toUpperCase() || 'UNKNOWN'}
+                </Badge>
+                {order.paymentMode && (
+                  <Badge variant="outline">{order.paymentMode}</Badge>
+                )}
+              </div>
             </div>
             <div>
               <Typography variant="small" className="text-muted-foreground">Items Count</Typography>
@@ -1193,7 +1198,19 @@ const OrderDetails = () => {
                 <Typography variant="p" className="text-muted-foreground">Items Total:</Typography>
                 <Typography variant="p">₹{(calculateTotal() - shippingCost).toFixed(2)}</Typography>
               </div>
-              
+
+              {/* Coupon Discount */}
+              {order.couponCode && (
+                <div className="flex justify-between items-center">
+                  <Typography variant="p" className="text-muted-foreground">
+                    Coupon ({order.couponCode}):
+                  </Typography>
+                  <Typography variant="p" className="text-[var(--color-success)]">
+                    −₹{(order.couponDiscountAmount || 0).toFixed(2)}
+                  </Typography>
+                </div>
+              )}
+
               {/* Shipping Cost */}
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
