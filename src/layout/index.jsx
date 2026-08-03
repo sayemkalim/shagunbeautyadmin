@@ -4,7 +4,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchOrders } from "@/pages/orders/helpers/fetchOrders";
-import { playLoudRingtone } from "@/utils/sound";
+import { playLoudRingtone, initAudioUnlock } from "@/utils/sound";
 import { toast } from "sonner";
 
 const Layout = () => {
@@ -12,6 +12,11 @@ const Layout = () => {
   
   // Track last play time to prevent overlapping and respect the 2-minute reminder interval
   const lastPlayTimeRef = useRef(0);
+
+  // Initialize the audio unlock listener to bypass browser autoplay policy
+  useEffect(() => {
+    initAudioUnlock();
+  }, []);
   
   const triggerRingtone = () => {
     console.log("Triggering loud order notification ringtone (3 times)");

@@ -5,6 +5,19 @@
  */
 
 let cachedAudio = null;
+let audioUnlocked = false;
+
+// Helper to get or create cached HTML5 Audio with fallback handling
+const getOrCreateAudio = () => {
+  if (!cachedAudio) {
+    cachedAudio = new Audio("/notification.wav");
+    cachedAudio.volume = 1.0;
+    cachedAudio.onerror = (e) => {
+      console.warn("Failed to load /notification.wav:", e);
+    };
+  }
+  return cachedAudio;
+};
 
 // Fallback chime: simple double-chime using Web Audio API
 const playFallbackChime = () => {
@@ -85,22 +98,86 @@ const playFallbackRingtone = () => {
   }
 };
 
+// Initialize listeners to unlock audio on first user interaction (bypasses autoplay blocks)
+export const initAudioUnlock = () => {
+  if (typeof window === "undefined" || audioUnlocked) return;
+
+  const unlock = () => {
+    if (audioUnlocked) return;
+
+    console.log("User interaction detected, unlocking audio context...");
+
+    // 1. Unlock HTML5 Audio
+    const audio = getOrCreateAudio();
+    audio.volume = 0; // Play silently to unlock
+    const playPromise = audio.play();
+
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => {
+          audio.pause();
+          audio.currentTime = 0;
+          audio.volume = 1.0;
+          audioUnlocked = true;
+          console.log("HTML5 Audio successfully unlocked");
+          cleanup();
+        })
+        .catch((err) => {
+          console.warn("HTML5 Audio unlock failed:", err);
+        });
+    } else {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.volume = 1.0;
+      audioUnlocked = true;
+      console.log("HTML5 Audio unlocked (no promise)");
+      cleanup();
+    }
+
+    // 2. Unlock Web Audio API context for fallbacks
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioContextClass) {
+        const tempCtx = new AudioContextClass();
+        if (tempCtx.state === "suspended") {
+          tempCtx.resume().then(() => {
+            tempCtx.close();
+            console.log("Web Audio API successfully unlocked");
+          });
+        } else {
+          tempCtx.close();
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to unlock Web Audio API:", e);
+    }
+  };
+
+  const cleanup = () => {
+    document.removeEventListener("click", unlock);
+    document.removeEventListener("keydown", unlock);
+    document.removeEventListener("touchstart", unlock);
+  };
+
+  document.addEventListener("click", unlock);
+  document.addEventListener("keydown", unlock);
+  document.addEventListener("touchstart", unlock);
+};
+
 // Play a single order notification chime (at max volume)
 export const playNotificationSound = () => {
   try {
-    if (!cachedAudio) {
-      cachedAudio = new Audio("/notification.wav");
-      cachedAudio.volume = 1.0;
-      cachedAudio.onerror = () => {
-        console.warn("Failed to load /notification.wav, using Web Audio fallback");
-        playFallbackChime();
-      };
-    }
+    const audio = getOrCreateAudio();
+    audio.currentTime = 0;
+    audio.volume = 1.0;
     
-    cachedAudio.currentTime = 0;
-    cachedAudio.volume = 1.0;
+    // Attach error handler for this instance play
+    audio.onerror = () => {
+      console.warn("Failed to load /notification.wav, using Web Audio fallback");
+      playFallbackChime();
+    };
     
-    const playPromise = cachedAudio.play();
+    const playPromise = audio.play();
     if (playPromise !== undefined) {
       playPromise.catch((error) => {
         console.warn("Audio play blocked by browser autoplay policy, attempting fallback.", error);
@@ -119,19 +196,17 @@ export const playLoudRingtone = (times = 3) => {
   
   const playOnce = () => {
     try {
-      if (!cachedAudio) {
-        cachedAudio = new Audio("/notification.wav");
-        cachedAudio.volume = 1.0;
-        cachedAudio.onerror = () => {
-          console.warn("Failed to load /notification.wav, using retro ringtone fallback");
-          playFallbackRingtone();
-        };
-      }
+      const audio = getOrCreateAudio();
+      audio.currentTime = 0;
+      audio.volume = 1.0;
       
-      cachedAudio.currentTime = 0;
-      cachedAudio.volume = 1.0;
+      // Attach error handler for this instance play
+      audio.onerror = () => {
+        console.warn("Failed to load /notification.wav, using retro ringtone fallback");
+        playFallbackRingtone();
+      };
       
-      const playPromise = cachedAudio.play();
+      const playPromise = audio.play();
       if (playPromise !== undefined) {
         playPromise.catch((error) => {
           console.warn("Audio play blocked, using retro ringtone fallback", error);
