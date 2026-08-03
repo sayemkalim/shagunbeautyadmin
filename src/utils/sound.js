@@ -2,10 +2,21 @@
  * Utility to play notification sounds and loud ringtones for new orders.
  * Attempts to play the downloaded wav file first, falling back to 
  * Web Audio API synthesized telephone chimes/rings if the file fails.
+ * Also utilizes browser SpeechSynthesis API to speak "Order placed" aloud.
  */
 
 let cachedAudio = null;
 let audioUnlocked = false;
+
+// Pre-initialize Speech Synthesis voices
+if (typeof window !== "undefined" && window.speechSynthesis) {
+  window.speechSynthesis.getVoices();
+  if (window.speechSynthesis.addEventListener) {
+    window.speechSynthesis.addEventListener("voiceschanged", () => {
+      window.speechSynthesis.getVoices();
+    });
+  }
+}
 
 // Helper to get or create cached HTML5 Audio with fallback handling
 const getOrCreateAudio = () => {
@@ -17,6 +28,32 @@ const getOrCreateAudio = () => {
     };
   }
   return cachedAudio;
+};
+
+// Speak text aloud using browser SpeechSynthesis API
+export const speakNotification = (text = "Order placed! Order placed!") => {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+
+  try {
+    // Cancel any ongoing speech to avoid overlap
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.volume = 1.0;
+    utterance.rate = 0.95; // Slightly slower for clear pronounciation
+    utterance.pitch = 1.0;  // Natural pitch
+    
+    // Attempt to pick a premium English voice
+    const voices = window.speechSynthesis.getVoices();
+    const chosenVoice = voices.find(v => v.lang.startsWith("en") && (v.name.includes("Google") || v.name.includes("Natural") || v.name.includes("Samantha"))) || voices.find(v => v.lang.startsWith("en"));
+    if (chosenVoice) {
+      utterance.voice = chosenVoice;
+    }
+    
+    window.speechSynthesis.speak(utterance);
+  } catch (error) {
+    console.warn("Speech synthesis failed:", error);
+  }
 };
 
 // Fallback chime: simple double-chime using Web Audio API
@@ -151,6 +188,17 @@ export const initAudioUnlock = () => {
     } catch (e) {
       console.warn("Failed to unlock Web Audio API:", e);
     }
+    
+    // 3. Unlock SpeechSynthesis (by speaking an empty string)
+    try {
+      if (window.speechSynthesis) {
+        const u = new SpeechSynthesisUtterance("");
+        window.speechSynthesis.speak(u);
+        console.log("SpeechSynthesis successfully unlocked");
+      }
+    } catch (e) {
+      console.warn("Failed to unlock SpeechSynthesis:", e);
+    }
   };
 
   const cleanup = () => {
@@ -175,18 +223,27 @@ export const playNotificationSound = () => {
     audio.onerror = () => {
       console.warn("Failed to load /notification.wav, using Web Audio fallback");
       playFallbackChime();
+      speakNotification("Order placed!");
     };
     
     const playPromise = audio.play();
     if (playPromise !== undefined) {
-      playPromise.catch((error) => {
-        console.warn("Audio play blocked by browser autoplay policy, attempting fallback.", error);
-        playFallbackChime();
-      });
+      playPromise
+        .then(() => {
+          speakNotification("Order placed!");
+        })
+        .catch((error) => {
+          console.warn("Audio play blocked by browser autoplay policy, attempting fallback.", error);
+          playFallbackChime();
+          speakNotification("Order placed!");
+        });
+    } else {
+      speakNotification("Order placed!");
     }
   } catch (err) {
     console.warn("Failed to play notification sound, using Web Audio fallback.", err);
     playFallbackChime();
+    speakNotification("Order placed!");
   }
 };
 
@@ -204,23 +261,37 @@ export const playLoudRingtone = (times = 3) => {
       audio.onerror = () => {
         console.warn("Failed to load /notification.wav, using retro ringtone fallback");
         playFallbackRingtone();
+        speakNotification("New order placed!");
       };
       
       const playPromise = audio.play();
       if (playPromise !== undefined) {
-        playPromise.catch((error) => {
-          console.warn("Audio play blocked, using retro ringtone fallback", error);
-          playFallbackRingtone();
-        });
+        playPromise
+          .then(() => {
+            // Speak "New order placed!" slightly after the ringtone starts
+            setTimeout(() => {
+              speakNotification("New order placed!");
+            }, 800);
+          })
+          .catch((error) => {
+            console.warn("Audio play blocked, using retro ringtone fallback", error);
+            playFallbackRingtone();
+            speakNotification("New order placed!");
+          });
+      } else {
+        setTimeout(() => {
+          speakNotification("New order placed!");
+        }, 800);
       }
     } catch (err) {
       console.warn("Failed to play audio, using retro ringtone fallback", err);
       playFallbackRingtone();
+      speakNotification("New order placed!");
     }
     
     playCount++;
     if (playCount < times) {
-      setTimeout(playOnce, 2000); // 2 seconds between rings
+      setTimeout(playOnce, 6000); // 6 seconds between rings (sound is 5 seconds long)
     }
   };
   
