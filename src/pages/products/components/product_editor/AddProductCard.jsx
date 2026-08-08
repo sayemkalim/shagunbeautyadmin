@@ -2,42 +2,45 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import Select from "react-select";
-import { XCircle, Loader2, Sparkles, PlusCircle, Info } from "lucide-react";
+import { XCircle, Trash2, Loader2, Sparkles, PlusCircle, Info } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import Typography from "@/components/typography";
 import NavbarItem from "@/components/navbar/navbar_item";
 import ColorPickerInput from "@/components/color_picker_input";
+import { CustomDialog } from "@/components/custom_dialog";
 
 import { getItem } from "@/utils/local_storage";
 import { updateProduct } from "../helpers/updateProduct";
 import { createProduct } from "../helpers/createProduct";
+import { deleteVariant } from "../helpers/deleteVariant";
 import { fetchSubCategory } from "@/pages/sub_categories/helpers/fetchsub-cat";
 import { fetchBrand } from "@/pages/brands/helpers/fetchBrand";
 
-// ✅ Tag options
-const TAG_OPTIONS = [
-  { value: "no_palm_oil", label: "No Palm Oil" },
-  { value: "organic", label: "Organic" },
-  { value: "no_gmo", label: "No GMO" },
-  { value: "no_aritificial_flavors", label: "No Artificial Flavours" },
-  { value: "vegan", label: "Vegan" },
-  { value: "sugar_free", label: "Sugar Free" },
-  { value: "gluten_free", label: "Gluten Free" },
-  { value: "soya_free", label: "Soya Free" },
-  { value: "no_preservatives", label: "No Preservatives" },
-  { value: "lactose_free", label: "Lactose Free" },
-  { value: "no_flavour_enhancer", label: "No Flavour Enhancer" },
-];
+const generateRandomSKU = () => {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let suffix = "";
+  for (let i = 0; i < 10; i++) {
+    suffix += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `SKU-${suffix}`;
+};
 
 const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
   const navigate = useNavigate();
   const [isGeneratingSKU, setIsGeneratingSKU] = useState(false);
+  const [generatingVariantSkuIndex, setGeneratingVariantSkuIndex] = useState(null);
+
+  const userRole = getItem("userRole");
+  const canDeleteVariant = userRole === "admin" || userRole === "super_admin";
+
+  // Persisted variant awaiting delete confirmation: { sku, label }
+  const [variantPendingDelete, setVariantPendingDelete] = useState(null);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -47,7 +50,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
     sku: "",
     weight_in_grams: "",
     color: "",
-    inventory: 1,
+    inventory: true,
     images: [],
     imagePreviews: [],
     bannerImage: null,
@@ -167,7 +170,40 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
       return { ...prev, variants: newVariants };
     });
   };
-  
+
+  // Clicking the remove action on a variant row: unsaved rows (never persisted
+  // to the backend) are just spliced out locally; persisted variants require
+  // confirmation since deletion hits the API immediately.
+  const handleRemoveVariantClick = (index) => {
+    const variant = formData.variants[index];
+    if (variant.originalSku) {
+      setVariantPendingDelete({ sku: variant.originalSku, label: variant.name || variant.sku });
+    } else {
+      removeVariant(index);
+    }
+  };
+
+  const deleteVariantMutation = useMutation({
+    mutationFn: ({ sku }) => deleteVariant({ productId: initialData._id, sku }),
+    onSuccess: (res, variables) => {
+      // apiService never throws on API errors — it resolves with an
+      // error-shaped object instead, so success must be checked explicitly.
+      if (res?.error || res?.response?.success === false) {
+        toast.error(res?.response?.data?.message || "Failed to delete variant.");
+        return;
+      }
+      toast.success(res?.response?.message || "Variant deleted successfully");
+      setFormData((prev) => ({
+        ...prev,
+        variants: prev.variants.filter((v) => v.originalSku !== variables.sku),
+      }));
+      setVariantPendingDelete(null);
+    },
+    onError: (error) => {
+      toast.error(error?.response?.data?.message || "Failed to delete variant.");
+    },
+  });
+
   const handleVariantChange = (index, field, value) => {
     const updatedVariants = [...formData.variants];
     updatedVariants[index][field] = value;
@@ -190,28 +226,27 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
   // Generate SKU function
   const generateSKU = () => {
     setIsGeneratingSKU(true);
-    
+
     // Mock AI generation delay
     setTimeout(() => {
-      const generateRandomString = (length) => {
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        let result = '';
-        for (let i = 0; i < length; i++) {
-          result += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        return result;
-      };
-
-      const randomSuffix = generateRandomString(10);
-      const generatedSKU = `SKU-${randomSuffix}`;
-      
       setFormData((prev) => ({
         ...prev,
-        sku: generatedSKU,
+        sku: generateRandomSKU(),
       }));
-      
+
       setIsGeneratingSKU(false);
     }, 1500); // 1.5 second delay to mock AI processing
+  };
+
+  // Generate SKU for a single variant row
+  const generateVariantSKU = (index) => {
+    setGeneratingVariantSkuIndex(index);
+
+    // Mock AI generation delay, mirrors generateSKU above
+    setTimeout(() => {
+      handleVariantChange(index, "sku", generateRandomSKU());
+      setGeneratingVariantSkuIndex(null);
+    }, 1500);
   };
   const {
     data: apiSubcategoriesResponse,
@@ -243,7 +278,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
         sku: initialData.sku || "",
         weight_in_grams: initialData.weight_in_grams || "",
         color: initialData.color || "",
-        inventory: initialData.inventory ?? 1,
+        inventory: Boolean(initialData.inventory),
         images: [],
         imagePreviews: Array.isArray(initialData.images)
           ? initialData.images.map((imgUrl) => ({
@@ -263,6 +298,11 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
         variants: Array.isArray(initialData.variants) && initialData.variants.length > 0
           ? initialData.variants.map(v => ({
               sku: v.sku || "",
+              // The sku this variant is persisted under on the backend, kept
+              // separate from the editable `sku` field above so a delete
+              // request always targets the real backend record even if the
+              // admin edits the sku text without saving.
+              originalSku: v.sku || "",
               name: v.name || "",
               price: v.price || "",
               discounted_price: v.discounted_price || "",
@@ -365,11 +405,6 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
     }
   };
 
-  const handleTagChange = (selectedOptions) => {
-    const tags = selectedOptions ? selectedOptions.map((option) => option.value) : [];
-    setFormData((prev) => ({ ...prev, tags }));
-  };
-
   // Submit handler
   const handleSubmit = () => {
     const userId = getItem("userId");
@@ -396,7 +431,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
     form.append("discounted_price", formData.saleprice);
     form.append("weight_in_grams", formData.weight_in_grams);
     form.append("color", formData.color);
-    form.append("inventory", formData.inventory);
+    form.append("inventory", formData.inventory ? 1 : 0);
     form.append("sub_category", formData.sub_category);
     form.append("brand", formData.brand);
     form.append("user_id", userId);
@@ -577,14 +612,17 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
         {/* Inventory */}
         <div className="space-y-2">
           <Label>Inventory</Label>
-          <Input
-            type="number"
+          <select
             name="inventory"
-            value={formData.inventory}
-            onChange={handleChange}
-            placeholder="1"
-            min="0"
-          />
+            value={formData.inventory ? "true" : "false"}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, inventory: e.target.value === "true" }))
+            }
+            className="border-input bg-background text-foreground focus-visible:ring-ring/50 w-full rounded-md border px-3 py-2 text-sm shadow-elegant-sm outline-none focus-visible:ring-[3px]"
+          >
+            <option value="true">In Stock</option>
+            <option value="false">Out of Stock</option>
+          </select>
         </div>
         </div>
 
@@ -592,20 +630,6 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
           <Typography variant="h6" className="text-foreground border-border border-b pb-2 font-semibold">
             Organization
           </Typography>
-
-        {/* Tags */}
-        <div className="space-y-2">
-          <Label>Tags</Label>
-          <Select
-            options={TAG_OPTIONS}
-            isMulti
-            onChange={handleTagChange}
-            className="react-select-container"
-            classNamePrefix="react-select"
-            placeholder="Select tags..."
-            value={TAG_OPTIONS.filter((option) => formData.tags.includes(option.value))}
-          />
-        </div>
 
         {/* Subcategory */}
         <div className="space-y-2">
@@ -791,23 +815,70 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
               key={index}
               className="border-border bg-muted/20 relative space-y-4 rounded-xl border p-6"
             >
-              <button
-                type="button"
-                onClick={() => removeVariant(index)}
-                className="text-muted-foreground hover:text-destructive absolute top-4 right-4 transition-colors"
-                title="Remove Variant"
-              >
-                <XCircle size={20} />
-              </button>
+              {variant.originalSku ? (
+                canDeleteVariant ? (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveVariantClick(index)}
+                    disabled={
+                      deleteVariantMutation.isPending &&
+                      variantPendingDelete?.sku === variant.originalSku
+                    }
+                    className="text-muted-foreground hover:text-destructive absolute top-4 right-4 transition-colors disabled:opacity-50"
+                    title="Delete Variant"
+                  >
+                    {deleteVariantMutation.isPending &&
+                    variantPendingDelete?.sku === variant.originalSku ? (
+                      <Loader2 size={20} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={20} />
+                    )}
+                  </button>
+                ) : (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="absolute top-4 right-4">
+                        <Trash2 size={20} className="text-muted-foreground/50 cursor-not-allowed" />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>Only admins can delete a saved variant</TooltipContent>
+                  </Tooltip>
+                )
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleRemoveVariantClick(index)}
+                  className="text-muted-foreground hover:text-destructive absolute top-4 right-4 transition-colors"
+                  title="Remove Variant"
+                >
+                  <XCircle size={20} />
+                </button>
+              )}
 
               <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                 <div className="flex flex-col">
                   <Label htmlFor={`sku-${index}`} className="mb-1">SKU</Label>
-                  <Input
-                    id={`sku-${index}`}
-                    value={variant.sku}
-                    onChange={(e) => handleVariantChange(index, "sku", e.target.value)}
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      id={`sku-${index}`}
+                      value={variant.sku}
+                      onChange={(e) => handleVariantChange(index, "sku", e.target.value)}
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      onClick={() => generateVariantSKU(index)}
+                      variant="outline"
+                      className="px-3 whitespace-nowrap"
+                      disabled={generatingVariantSkuIndex === index}
+                    >
+                      {generatingVariantSkuIndex === index ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="flex flex-col">
@@ -1007,6 +1078,15 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
           </Button>
         </div>
       </div>
+
+      <CustomDialog
+        onOpen={!!variantPendingDelete}
+        onClose={() => setVariantPendingDelete(null)}
+        title={variantPendingDelete?.label}
+        modalType="Delete"
+        onDelete={() => deleteVariantMutation.mutate({ sku: variantPendingDelete.sku })}
+        isLoading={deleteVariantMutation.isPending}
+      />
     </>
   );
 };

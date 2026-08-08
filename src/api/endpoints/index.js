@@ -21,6 +21,7 @@ export const endpoints = {
   order: "api/order",
   generate_payment_link: "api/order/generate-payment-link",
   bulk_order_status: "api/order/bulk-status",
+  order_bill: "api/order",
   // bundles
   bundle: "api/bundles",
   //users

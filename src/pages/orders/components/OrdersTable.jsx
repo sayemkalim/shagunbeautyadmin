@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import ActionMenu from "@/components/action_menu";
-import { Eye, Pencil } from "lucide-react";
+import { Eye, Pencil, FileDown } from "lucide-react";
 import CustomTable from "@/components/custom_table";
 import Typography from "@/components/typography";
 import { useEffect, useState, useMemo } from "react";
@@ -27,6 +27,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { fetchOrders } from "../helpers/fetchOrders";
 import { updateOrderStatus } from "../helpers/updateOrderStatus";
 import { bulkUpdateOrderStatus } from "../helpers/bulkUpdateOrderStatus";
+import { fetchOrderBill } from "../helpers/fetchOrderBill";
+import { triggerBillDownload } from "../helpers/triggerBillDownload";
 import { getStatusBadgeClass } from "../helpers/statusBadge";
 import { cn } from "@/lib/utils";
 
@@ -67,6 +69,7 @@ const OrdersTable = ({
   const [selectedRowIds, setSelectedRowIds] = useState([]);
   const [openBulkStatusDialog, setOpenBulkStatusDialog] = useState(false);
   const [bulkStatus, setBulkStatus] = useState("");
+  const [downloadingOrderId, setDownloadingOrderId] = useState(null);
 
   const { mutate: updateOrderStatusMutation, isLoading: isUpdating } =
     useMutation({
@@ -100,6 +103,27 @@ const OrdersTable = ({
         toast.error("Failed to update order statuses.");
       },
     });
+
+  const { mutate: downloadInvoiceMutation } = useMutation({
+    mutationFn: (id) => fetchOrderBill({ id }),
+    onMutate: (id) => setDownloadingOrderId(id),
+    onSuccess: (res) => {
+      // apiService never throws on API errors — it resolves with an
+      // error-shaped object instead, so success must be checked explicitly.
+      if (res?.error || res?.response?.success === false) {
+        toast.error(res?.response?.data?.message || "Failed to fetch invoice. Please try again.");
+        return;
+      }
+      const downloaded = triggerBillDownload(res?.response?.data);
+      if (!downloaded) {
+        toast.error("Invoice URL not available.");
+      }
+    },
+    onError: (error) => {
+      toast.error(error?.response?.data?.message || "Failed to fetch invoice. Please try again.");
+    },
+    onSettled: () => setDownloadingOrderId(null),
+  });
 
   const orders = useMemo(() => {
     return Array.isArray(apiOrdersResponse?.response?.data?.data)
@@ -290,6 +314,18 @@ const OrdersTable = ({
                 icon: Eye,
                 action: () => navigate(`/dashboard/orders/${order._id}`),
               },
+              ...(order.status !== "pending"
+                ? [
+                    {
+                      label:
+                        downloadingOrderId === order._id
+                          ? "Downloading..."
+                          : "Download Invoice",
+                      icon: FileDown,
+                      action: () => downloadInvoiceMutation(order._id),
+                    },
+                  ]
+                : []),
             ]}
           />
         </div>

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ArrowLeft, Plus, Minus, Save, Trash2, Mail, CreditCard, Edit, Package, Truck, DollarSign, Eye, EyeOff, Copy, Layers } from "lucide-react";
+import { ArrowLeft, Plus, Minus, Save, Trash2, Mail, CreditCard, Edit, Package, Truck, DollarSign, Eye, EyeOff, Copy, Layers, FileDown } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -13,15 +13,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import Typography from "@/components/typography";
 
 import { fetchOrderById } from "../helpers/fetchOrderById";
 import { updateOrder } from "../helpers/updateOrder";
 import { generatePaymentLink } from "../helpers/generatePaymentLink";
+import { fetchOrderBill } from "../helpers/fetchOrderBill";
+import { triggerBillDownload } from "../helpers/triggerBillDownload";
 import { fetchProducts } from "@/pages/products/components/helpers/fetchProducts";
 import { fetchBundle } from "@/pages/bundles/helpers/fetchBundle";
 import { getStatusBadgeClass } from "../helpers/statusBadge";
 import { cn } from "@/lib/utils";
+
+// Mirrors the discount-description format used in CouponsTable.jsx
+const formatCouponDiscount = (coupon) => {
+  if (coupon.discount_type === "percentage") {
+    return `${coupon.discount_value}% off`;
+  }
+  return `₹${coupon.discount_value} off`;
+};
 
 const OrderDetails = () => {
   const { orderId } = useParams();
@@ -134,6 +145,26 @@ const OrderDetails = () => {
     },
     onError: () => {
       toast.error("Failed to generate payment link. Please try again.");
+    },
+  });
+
+  // Fetch invoice/bill mutation
+  const { mutate: fetchOrderBillMutation, isLoading: isFetchingBill } = useMutation({
+    mutationFn: () => fetchOrderBill({ id: orderId }),
+    onSuccess: (res) => {
+      // apiService never throws on API errors — it resolves with an
+      // error-shaped object instead, so success must be checked explicitly.
+      if (res?.error || res?.response?.success === false) {
+        toast.error(res?.response?.data?.message || "Failed to fetch invoice. Please try again.");
+        return;
+      }
+      const downloaded = triggerBillDownload(res?.response?.data);
+      if (!downloaded) {
+        toast.error("Invoice URL not available.");
+      }
+    },
+    onError: (error) => {
+      toast.error(error?.response?.data?.message || "Failed to fetch invoice. Please try again.");
     },
   });
 
@@ -608,6 +639,37 @@ const OrderDetails = () => {
             <CreditCard className="h-4 w-4" />
             {isGeneratingPaymentLink ? "Generating..." : "Generate Payment Link"}
           </Button>
+
+          {/* Download Invoice Button */}
+          {order.status === "pending" ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled
+                    className="flex items-center gap-2"
+                  >
+                    <FileDown className="h-4 w-4" />
+                    Download Invoice
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Available once the order is confirmed</TooltipContent>
+            </Tooltip>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fetchOrderBillMutation()}
+              disabled={isFetchingBill}
+              className="flex items-center gap-2"
+            >
+              <FileDown className="h-4 w-4" />
+              {isFetchingBill ? "Loading..." : "Download Invoice"}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1200,11 +1262,16 @@ const OrderDetails = () => {
               </div>
 
               {/* Coupon Discount */}
-              {order.couponCode && (
-                <div className="flex justify-between items-center">
-                  <Typography variant="p" className="text-muted-foreground">
-                    Coupon ({order.couponCode}):
-                  </Typography>
+              {order.coupon && (
+                <div className="flex justify-between items-start">
+                  <div>
+                    <Typography variant="p" className="text-muted-foreground">
+                      Coupon ({order.coupon.code})
+                    </Typography>
+                    <Typography variant="small" className="text-muted-foreground">
+                      {formatCouponDiscount(order.coupon)}
+                    </Typography>
+                  </div>
                   <Typography variant="p" className="text-[var(--color-success)]">
                     −₹{(order.couponDiscountAmount || 0).toFixed(2)}
                   </Typography>
@@ -1228,7 +1295,7 @@ const OrderDetails = () => {
               <div className="flex justify-between items-center pt-2 border-t">
                 <Typography variant="h4">Final Total:</Typography>
                 <Typography variant="h4" className="text-[var(--color-success)]">
-                  ₹{calculateTotal().toFixed(2)}
+                  ₹{(order.finalTotalAmount ?? calculateTotal()).toFixed(2)}
                 </Typography>
               </div>
               
