@@ -50,6 +50,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
     sku: "",
     weight_in_grams: "",
     color: "",
+    expiry_date: "",
     inventory: true,
     images: [],
     imagePreviews: [],
@@ -70,6 +71,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
         inventory: "",
         color: "",
         weight_in_grams: "",
+        expiry_date: "",
         image: null,
         imagePreview: null,
       },
@@ -156,6 +158,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
           inventory: "",
           color: "",
           weight_in_grams: "",
+          expiry_date: "",
           image: null,
           imagePreview: null,
         },
@@ -278,6 +281,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
         sku: initialData.sku || "",
         weight_in_grams: initialData.weight_in_grams || "",
         color: initialData.color || "",
+        expiry_date: initialData.expiry_date ? initialData.expiry_date.split('T')[0] : "",
         inventory: Boolean(initialData.inventory),
         images: [],
         imagePreviews: Array.isArray(initialData.images)
@@ -309,6 +313,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
               inventory: v.inventory || "",
               color: v.color || "",
               weight_in_grams: v.weight_in_grams || "",
+              expiry_date: v.expiry_date ? v.expiry_date.split('T')[0] : "",
               image: null,
               imagePreview: null,
             }))
@@ -321,6 +326,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
                 inventory: "",
                 color: "",
                 weight_in_grams: "",
+                expiry_date: "",
                 image: null,
                 imagePreview: null,
               },
@@ -431,6 +437,9 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
     form.append("discounted_price", formData.saleprice);
     form.append("weight_in_grams", formData.weight_in_grams);
     form.append("color", formData.color);
+    if (formData.expiry_date) {
+      form.append("expiry_date", formData.expiry_date);
+    }
     form.append("inventory", formData.inventory ? 1 : 0);
     form.append("sub_category", formData.sub_category);
     form.append("brand", formData.brand);
@@ -468,6 +477,9 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
       form.append(`variants[${i}][inventory]`, variant.inventory);
       form.append(`variants[${i}][color]`, variant.color);
       form.append(`variants[${i}][weight_in_grams]`, variant.weight_in_grams);
+      if (variant.expiry_date) {
+        form.append(`variants[${i}][expiry_date]`, variant.expiry_date);
+      }
 
       // Append images for this variant
       if (variant.images && variant.images.length > 0) {
@@ -553,6 +565,17 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
           <ColorPickerInput
             value={formData.color}
             onChange={(value) => setFormData((prev) => ({ ...prev, color: value }))}
+          />
+        </div>
+
+        {/* Expiry Date */}
+        <div className="space-y-2">
+          <Label>Expiry Date</Label>
+          <Input
+            type="date"
+            name="expiry_date"
+            value={formData.expiry_date}
+            onChange={handleChange}
           />
         </div>
 
@@ -955,6 +978,18 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
                     }
                     placeholder="Variant weight in grams"
                     min="0"
+                  />
+                </div>
+
+                <div className="flex flex-col">
+                  <Label htmlFor={`expiry_date-${index}`} className="mb-1">Expiry Date</Label>
+                  <Input
+                    id={`expiry_date-${index}`}
+                    type="date"
+                    value={variant.expiry_date}
+                    onChange={(e) =>
+                      handleVariantChange(index, "expiry_date", e.target.value)
+                    }
                   />
                 </div>
               </div>

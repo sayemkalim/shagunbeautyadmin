@@ -765,6 +765,14 @@ const OrderDetails = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            {order.utr_number && (
+              <div>
+                <Typography variant="small" className="text-muted-foreground">UTR Number</Typography>
+                <Typography variant="p" className="font-medium font-mono text-sm">
+                  {order.utr_number}
+                </Typography>
+              </div>
+            )}
             <div>
               <Typography variant="small" className="text-muted-foreground">Payment Link ID</Typography>
               <Typography variant="p" className="font-medium font-mono text-sm">
