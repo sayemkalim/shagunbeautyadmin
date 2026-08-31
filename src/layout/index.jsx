@@ -38,17 +38,6 @@ const Layout = () => {
     refetchIntervalInBackground: true,
   });
 
-  // Poll specifically for pending orders (to check if reminder ringtone is needed)
-  const { data: pendingOrdersRes } = useQuery({
-    queryKey: ["pending-orders-count"],
-    queryFn: () => fetchOrders({ params: { page: 1, per_page: 1, status: "pending" } }),
-    refetchInterval: 15000, // 15 seconds
-    refetchIntervalInBackground: true,
-  });
-
-  const pendingCount = pendingOrdersRes?.response?.data?.total || 0;
-  const hasPending = pendingCount > 0;
-
   // New Order detection and immediate alert
   useEffect(() => {
     const orders = latestOrdersRes?.response?.data?.data;
@@ -90,33 +79,6 @@ const Layout = () => {
       }
     }
   }, [latestOrdersRes, lastOrderTime, queryClient]);
-
-  // Periodic reminder ringtone (every 2 minutes while there are pending orders)
-  useEffect(() => {
-    let intervalId = null;
-
-    if (hasPending) {
-      // Play immediately if it hasn't been played in the last 2 minutes
-      const timeSinceLastPlay = Date.now() - lastPlayTimeRef.current;
-      if (timeSinceLastPlay >= 120000) {
-        triggerRingtone();
-      }
-
-      // Check every 10 seconds if we need to repeat the reminder ringtone
-      intervalId = setInterval(() => {
-        const elapsed = Date.now() - lastPlayTimeRef.current;
-        if (elapsed >= 120000) {
-          triggerRingtone();
-        }
-      }, 10000);
-    }
-
-    return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-    };
-  }, [hasPending]);
 
   return (
     <SidebarProvider>

@@ -182,6 +182,25 @@ const ProductDetails = () => {
             {product.brand && (
               <Detail label="Brand" value={product.brand.name} />
             )}
+            {product.weight_in_grams && (
+              <Detail
+                label="Weight / Volume"
+                value={
+                  (() => {
+                    const str = String(product.weight_in_grams).trim();
+                    if (str.endsWith("g") || str.endsWith("ml")) {
+                      return str;
+                    }
+                    const fallbackUnit = product.weight_unit ||
+                      product.unit ||
+                      (product.name && product.name.toLowerCase().includes("ml")
+                        ? "ml"
+                        : "g");
+                    return `${str}${fallbackUnit}`;
+                  })()
+                }
+              />
+            )}
             {/* <Detail
               label="Expiry Date"
               value={
@@ -249,7 +268,18 @@ const ProductDetails = () => {
             <p className="text-sm text-muted-foreground mb-1">
               {variant.color && <>Color: {variant.color}</>}
               {variant.color && variant.weight_in_grams ? " • " : ""}
-              {variant.weight_in_grams && <>Weight: {variant.weight_in_grams}g</>}
+              {variant.weight_in_grams && (
+                <>
+                  Weight/Volume: {variant.weight_in_grams}
+                  {variant.weight_unit ||
+                    variant.unit ||
+                    (variant.name && variant.name.toLowerCase().includes("ml")
+                      ? "ml"
+                      : product.name && product.name.toLowerCase().includes("ml")
+                      ? "ml"
+                      : "g")}
+                </>
+              )}
             </p>
           )}
 

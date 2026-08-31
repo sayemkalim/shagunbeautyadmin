@@ -195,6 +195,7 @@ const BrandsTable = ({ setBrandsLength, params }) => {
         isLoading={isLoading}
         error={error}
         emptyStateMessage="No brands available"
+        hidePagination={true}
       />
 
       <CustomDialog

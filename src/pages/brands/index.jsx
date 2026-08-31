@@ -12,7 +12,7 @@ const Brand = () => {
   const [searchText, setSearchText] = useState("");
   const [params, setParams] = useState({
     page: 1,
-    per_page: 25,
+    per_page: 1000,
     search: "",
     start_date: undefined,
     end_date: undefined,
@@ -61,7 +61,7 @@ const Brand = () => {
           searchText={searchText}
           handleSearch={handleSearch}
           onRowsPerPageChange={onRowsPerPageChange}
-          showRowSelection={true}
+          showRowSelection={false}
           rowsPerPage={params.per_page}
         />
         <BrandsTable

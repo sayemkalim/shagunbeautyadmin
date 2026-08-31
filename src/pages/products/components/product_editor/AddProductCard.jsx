@@ -31,6 +31,35 @@ const generateRandomSKU = () => {
   return `SKU-${suffix}`;
 };
 
+const parseWeightAndUnit = (val, name = "") => {
+  if (val === undefined || val === null || val === "") {
+    return { weight: "", unit: "g" };
+  }
+  const strVal = String(val).trim();
+  const match = strVal.match(/^([\d.]+)\s*(g|ml)$/i);
+  if (match) {
+    return {
+      weight: match[1],
+      unit: match[2].toLowerCase()
+    };
+  }
+  return {
+    weight: strVal,
+    unit: name.toLowerCase().includes("ml") ? "ml" : "g"
+  };
+};
+
+const syncNameWithWeightAndUnit = (name, weight, unit) => {
+  if (!weight) return name;
+  const nameStr = name || "";
+  const regex = /(\d+(?:\.\d+)?)\s*(g|ml)\b/i;
+  if (regex.test(nameStr)) {
+    return nameStr.replace(regex, `${weight}${unit}`);
+  } else {
+    return `${nameStr.trim()} (${weight}${unit})`;
+  }
+};
+
 const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
   const navigate = useNavigate();
   const [isGeneratingSKU, setIsGeneratingSKU] = useState(false);
@@ -49,6 +78,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
     saleprice: "",
     sku: "",
     weight_in_grams: "",
+    weight_unit: "g",
     color: "",
     expiry_date: "",
     inventory: true,
@@ -71,6 +101,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
         inventory: "",
         color: "",
         weight_in_grams: "",
+        weight_unit: "g",
         expiry_date: "",
         image: null,
         imagePreview: null,
@@ -158,6 +189,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
           inventory: "",
           color: "",
           weight_in_grams: "",
+          weight_unit: "g",
           expiry_date: "",
           image: null,
           imagePreview: null,
@@ -279,7 +311,8 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
         price: initialData.price || "",
         saleprice: initialData.discounted_price || "",
         sku: initialData.sku || "",
-        weight_in_grams: initialData.weight_in_grams || "",
+        weight_in_grams: parseWeightAndUnit(initialData.weight_in_grams, initialData.name || "").weight,
+        weight_unit: parseWeightAndUnit(initialData.weight_in_grams, initialData.name || "").unit,
         color: initialData.color || "",
         expiry_date: initialData.expiry_date ? initialData.expiry_date.split('T')[0] : "",
         inventory: Boolean(initialData.inventory),
@@ -312,7 +345,8 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
               discounted_price: v.discounted_price || "",
               inventory: v.inventory || "",
               color: v.color || "",
-              weight_in_grams: v.weight_in_grams || "",
+              weight_in_grams: parseWeightAndUnit(v.weight_in_grams, v.name || initialData.name || "").weight,
+              weight_unit: parseWeightAndUnit(v.weight_in_grams, v.name || initialData.name || "").unit,
               expiry_date: v.expiry_date ? v.expiry_date.split('T')[0] : "",
               image: null,
               imagePreview: null,
@@ -326,6 +360,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
                 inventory: "",
                 color: "",
                 weight_in_grams: "",
+                weight_unit: "g",
                 expiry_date: "",
                 image: null,
                 imagePreview: null,
@@ -430,12 +465,15 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
     setPriceTierErrors({});
 
     const form = new FormData();
-    form.append("name", formData.name);
+    const syncedName = syncNameWithWeightAndUnit(formData.name, formData.weight_in_grams, formData.weight_unit);
+    form.append("name", syncedName);
     form.append("sku", formData.sku);
     form.append("small_description", formData.description);
     form.append("price", formData.price);
     form.append("discounted_price", formData.saleprice);
     form.append("weight_in_grams", formData.weight_in_grams);
+    form.append("weight_unit", formData.weight_unit || "g");
+    form.append("unit", formData.weight_unit || "g");
     form.append("color", formData.color);
     if (formData.expiry_date) {
       form.append("expiry_date", formData.expiry_date);
@@ -471,12 +509,15 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
     
     validVariants.forEach((variant, i) => {
       form.append(`variants[${i}][sku]`, variant.sku);
-      form.append(`variants[${i}][name]`, variant.name);
+      const syncedVariantName = variant.name ? syncNameWithWeightAndUnit(variant.name, variant.weight_in_grams, variant.weight_unit || "g") : "";
+      form.append(`variants[${i}][name]`, syncedVariantName || variant.name);
       form.append(`variants[${i}][price]`, variant.price);
       form.append(`variants[${i}][discounted_price]`, variant.discounted_price);
       form.append(`variants[${i}][inventory]`, variant.inventory);
       form.append(`variants[${i}][color]`, variant.color);
       form.append(`variants[${i}][weight_in_grams]`, variant.weight_in_grams);
+      form.append(`variants[${i}][weight_unit]`, variant.weight_unit || "g");
+      form.append(`variants[${i}][unit]`, variant.weight_unit || "g");
       if (variant.expiry_date) {
         form.append(`variants[${i}][expiry_date]`, variant.expiry_date);
       }
@@ -546,17 +587,29 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
           </div>
         </div>
 
-        {/* Weight in Grams */}
+        {/* Weight / Volume */}
         <div className="space-y-2">
-          <Label>Weight (in grams)</Label>
-          <Input
-            type="number"
-            name="weight_in_grams"
-            value={formData.weight_in_grams}
-            onChange={handleChange}
-            placeholder="Product weight in grams"
-            min="0"
-          />
+          <Label>Weight / Volume</Label>
+          <div className="flex gap-2">
+            <Input
+              type="number"
+              name="weight_in_grams"
+              value={formData.weight_in_grams}
+              onChange={handleChange}
+              placeholder="Product weight/volume"
+              min="0"
+              className="flex-1"
+            />
+            <select
+              name="weight_unit"
+              onChange={handleChange}
+              value={formData.weight_unit}
+              className="border-input bg-background text-foreground focus-visible:ring-ring/50 rounded-md border px-3 py-2 text-sm shadow-elegant-sm outline-none focus-visible:ring-[3px] w-24"
+            >
+              <option value="g">g</option>
+              <option value="ml">ml</option>
+            </select>
+          </div>
         </div>
 
         {/* Color */}
@@ -968,17 +1021,30 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
                 </div>
 
                 <div className="flex flex-col">
-                  <Label htmlFor={`weight-${index}`} className="mb-1">Weight (in grams)</Label>
-                  <Input
-                    id={`weight-${index}`}
-                    type="number"
-                    value={variant.weight_in_grams}
-                    onChange={(e) =>
-                      handleVariantChange(index, "weight_in_grams", e.target.value)
-                    }
-                    placeholder="Variant weight in grams"
-                    min="0"
-                  />
+                  <Label htmlFor={`weight-${index}`} className="mb-1">Weight / Volume</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id={`weight-${index}`}
+                      type="number"
+                      value={variant.weight_in_grams}
+                      onChange={(e) =>
+                        handleVariantChange(index, "weight_in_grams", e.target.value)
+                      }
+                      placeholder="Weight/volume"
+                      min="0"
+                      className="flex-1"
+                    />
+                    <select
+                      value={variant.weight_unit || "g"}
+                      onChange={(e) =>
+                        handleVariantChange(index, "weight_unit", e.target.value)
+                      }
+                      className="border-input bg-background text-foreground focus-visible:ring-ring/50 rounded-md border px-3 py-2 text-sm shadow-elegant-sm outline-none focus-visible:ring-[3px] w-24"
+                    >
+                      <option value="g">g</option>
+                      <option value="ml">ml</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div className="flex flex-col">
