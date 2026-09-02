@@ -294,9 +294,9 @@ const ProductDetails = () => {
             )}
           </div>
 
-          {variant.images?.length > 0 && (
+          {((Array.isArray(variant.images) && variant.images.length > 0) || variant.image) && (
             <div className="mt-3 flex gap-2">
-              {variant.images.map((img, i) => (
+              {(Array.isArray(variant.images) ? variant.images : [variant.image]).map((img, i) => (
                 <Dialog key={i}>
                   <DialogTrigger asChild>
                     <img

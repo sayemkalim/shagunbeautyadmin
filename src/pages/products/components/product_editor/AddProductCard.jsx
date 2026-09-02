@@ -103,8 +103,8 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
         weight_in_grams: "",
         weight_unit: "g",
         expiry_date: "",
-        image: null,
-        imagePreview: null,
+        images: [],
+        imagePreviews: [],
       },
     ],
     priceTiers: [],
@@ -191,8 +191,8 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
           weight_in_grams: "",
           weight_unit: "g",
           expiry_date: "",
-          image: null,
-          imagePreview: null,
+          images: [],
+          imagePreviews: [],
         },
       ],
     }));
@@ -248,14 +248,58 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
     }));
   };
   
-  const handleVariantImageChange = (index, file) => {
-    const updatedVariants = [...formData.variants];
-    updatedVariants[index].image = file;
-    updatedVariants[index].imagePreview = URL.createObjectURL(file);
-    setFormData((prev) => ({
-      ...prev,
-      variants: updatedVariants,
+  const handleVariantImageChange = (index, e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const previews = files.map((file) => ({
+      file,
+      preview: URL.createObjectURL(file),
+      isFromServer: false,
     }));
+    setFormData((prev) => {
+      const updatedVariants = [...prev.variants];
+      const existingImages = updatedVariants[index].images || [];
+      const existingPreviews = updatedVariants[index].imagePreviews || [];
+      updatedVariants[index] = {
+        ...updatedVariants[index],
+        images: [...existingImages, ...files],
+        imagePreviews: [...existingPreviews, ...previews],
+      };
+      return {
+        ...prev,
+        variants: updatedVariants,
+      };
+    });
+    e.target.value = "";
+  };
+
+  const removeVariantImage = (variantIndex, imgIndex) => {
+    setFormData((prev) => {
+      const updatedVariants = [...prev.variants];
+      const currentVariant = updatedVariants[variantIndex];
+      const currentPreviews = currentVariant.imagePreviews || [];
+      const targetPreview = currentPreviews[imgIndex];
+
+      if (targetPreview && !targetPreview.isFromServer && targetPreview.preview) {
+        URL.revokeObjectURL(targetPreview.preview);
+      }
+
+      const newPreviews = currentPreviews.filter((_, i) => i !== imgIndex);
+      let newImages = currentVariant.images || [];
+      if (targetPreview?.file) {
+        newImages = newImages.filter((f) => f !== targetPreview.file);
+      }
+
+      updatedVariants[variantIndex] = {
+        ...currentVariant,
+        images: newImages,
+        imagePreviews: newPreviews,
+      };
+      return {
+        ...prev,
+        variants: updatedVariants,
+      };
+    });
   };
 
   // Generate SKU function
@@ -333,24 +377,35 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
         is_bakery: Boolean(initialData.is_bakery),
         is_best_seller: Boolean(initialData.is_best_seller),
         variants: Array.isArray(initialData.variants) && initialData.variants.length > 0
-          ? initialData.variants.map(v => ({
-              sku: v.sku || "",
-              // The sku this variant is persisted under on the backend, kept
-              // separate from the editable `sku` field above so a delete
-              // request always targets the real backend record even if the
-              // admin edits the sku text without saving.
-              originalSku: v.sku || "",
-              name: v.name || "",
-              price: v.price || "",
-              discounted_price: v.discounted_price || "",
-              inventory: v.inventory || "",
-              color: v.color || "",
-              weight_in_grams: parseWeightAndUnit(v.weight_in_grams, v.name || initialData.name || "").weight,
-              weight_unit: parseWeightAndUnit(v.weight_in_grams, v.name || initialData.name || "").unit,
-              expiry_date: v.expiry_date ? v.expiry_date.split('T')[0] : "",
-              image: null,
-              imagePreview: null,
-            }))
+          ? initialData.variants.map(v => {
+              const vImages = Array.isArray(v.images)
+                ? v.images
+                : v.image
+                ? [v.image]
+                : [];
+              return {
+                sku: v.sku || "",
+                // The sku this variant is persisted under on the backend, kept
+                // separate from the editable `sku` field above so a delete
+                // request always targets the real backend record even if the
+                // admin edits the sku text without saving.
+                originalSku: v.sku || "",
+                name: v.name || "",
+                price: v.price || "",
+                discounted_price: v.discounted_price || "",
+                inventory: v.inventory || "",
+                color: v.color || "",
+                weight_in_grams: parseWeightAndUnit(v.weight_in_grams, v.name || initialData.name || "").weight,
+                weight_unit: parseWeightAndUnit(v.weight_in_grams, v.name || initialData.name || "").unit,
+                expiry_date: v.expiry_date ? v.expiry_date.split('T')[0] : "",
+                images: [],
+                imagePreviews: vImages.map((imgUrl) => ({
+                  file: null,
+                  preview: imgUrl,
+                  isFromServer: true,
+                })),
+              };
+            })
           : [
               {
                 sku: "",
@@ -362,8 +417,8 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
                 weight_in_grams: "",
                 weight_unit: "g",
                 expiry_date: "",
-                image: null,
-                imagePreview: null,
+                images: [],
+                imagePreviews: [],
               },
             ],
         priceTiers: Array.isArray(initialData.price_tiers)
@@ -504,7 +559,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
   
     // ✅ Variants - only send if there are meaningful variants
     const validVariants = formData.variants.filter(variant => 
-      variant.sku.trim() || variant.name.trim() || variant.price || variant.discounted_price || variant.inventory
+      variant.sku.trim() || variant.name.trim() || variant.price || variant.discounted_price || variant.inventory || (variant.images && variant.images.length > 0)
     );
     
     validVariants.forEach((variant, i) => {
@@ -1001,12 +1056,13 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
                 </div>
 
                 <div className="flex flex-col">
-                  <Label htmlFor={`image-${index}`} className="mb-1">Image</Label>
+                  <Label htmlFor={`image-${index}`} className="mb-1">Images</Label>
                   <Input
                     id={`image-${index}`}
                     type="file"
                     accept="image/*"
-                    onChange={(e) => handleVariantImageChange(index, e.target.files[0])}
+                    multiple
+                    onChange={(e) => handleVariantImageChange(index, e)}
                     className="cursor-pointer"
                   />
                 </div>
@@ -1060,13 +1116,31 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
                 </div>
               </div>
 
-              {variant.imagePreview && (
+              {variant.imagePreviews && variant.imagePreviews.length > 0 && (
                 <div className="pt-2">
-                  <img
-                    src={variant.imagePreview}
-                    alt="Variant Preview"
-                    className="border-input bg-card h-32 w-32 rounded-lg border object-contain p-1"
-                  />
+                  <Label className="text-muted-foreground mb-2 block text-xs font-medium">Variant Images</Label>
+                  <div className="flex flex-wrap gap-3">
+                    {variant.imagePreviews.map((img, imgIndex) => (
+                      <div
+                        key={imgIndex}
+                        className="group border-input bg-card relative h-24 w-24 overflow-hidden rounded-lg border p-1"
+                      >
+                        <img
+                          src={img.preview}
+                          alt={`Variant ${index + 1} Image ${imgIndex + 1}`}
+                          className="h-full w-full object-contain"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeVariantImage(index, imgIndex)}
+                          className="bg-card text-destructive hover:text-destructive/80 shadow-elegant-sm absolute top-1 right-1 rounded-full p-0.5 transition-colors"
+                          title="Remove image"
+                        >
+                          <XCircle size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
