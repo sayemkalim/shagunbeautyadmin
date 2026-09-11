@@ -221,6 +221,7 @@ const Orders = () => {
                 disableAdd={true}
                 searchText={searchText}
                 handleSearch={handleSearch}
+                searchPlaceholder="Search by Order #, ID, mobile, customer..."
                 showDateRangePicker={true}
                 handleDateRangeChange={handleDateRangeChange}
                 showRowSelection={true}

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import ActionMenu from "@/components/action_menu";
-import { Eye, Pencil, FileDown } from "lucide-react";
+import { Eye, Pencil, FileDown, RefreshCw } from "lucide-react";
 import CustomTable from "@/components/custom_table";
 import Typography from "@/components/typography";
 import { useEffect, useState, useMemo } from "react";
@@ -48,11 +48,14 @@ const OrdersTable = ({
 }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const perPage = params.per_page || 10;
-  const queryParams = {
-    ...params,
-    per_page: perPage,
-  };
+  const perPage = params.per_page || 50;
+
+  // Memoize queryParams excluding search so search is handled client-side instantly
+  const queryParams = useMemo(() => {
+    const p = { ...params };
+    delete p.search;
+    return p;
+  }, [params.status, params.service_id, params.start_date, params.end_date, perPage]);
 
   const {
     data: apiOrdersResponse,
@@ -70,6 +73,7 @@ const OrdersTable = ({
   const [openBulkStatusDialog, setOpenBulkStatusDialog] = useState(false);
   const [bulkStatus, setBulkStatus] = useState("");
   const [downloadingOrderId, setDownloadingOrderId] = useState(null);
+  const [regeneratingOrderId, setRegeneratingOrderId] = useState(null);
 
   const { mutate: updateOrderStatusMutation, isLoading: isUpdating } =
     useMutation({
@@ -125,19 +129,114 @@ const OrdersTable = ({
     onSettled: () => setDownloadingOrderId(null),
   });
 
+  const { mutate: regenerateInvoiceMutation } = useMutation({
+    mutationFn: (id) => fetchOrderBill({ id, regenerate: true }),
+    onMutate: (id) => setRegeneratingOrderId(id),
+    onSuccess: (res) => {
+      if (res?.error || res?.response?.success === false) {
+        toast.error(res?.response?.data?.message || "Failed to regenerate invoice. Please try again.");
+        return;
+      }
+      const downloaded = triggerBillDownload(res?.response?.data);
+      if (!downloaded) {
+        toast.error("Invoice URL not available.");
+      } else {
+        toast.success("Invoice regenerated successfully!");
+        queryClient.invalidateQueries(["orders"]);
+      }
+    },
+    onError: (error) => {
+      toast.error(error?.response?.data?.message || "Failed to regenerate invoice. Please try again.");
+    },
+    onSettled: () => setRegeneratingOrderId(null),
+  });
+
   const orders = useMemo(() => {
     return Array.isArray(apiOrdersResponse?.response?.data?.data)
       ? apiOrdersResponse.response.data.data
       : [];
   }, [apiOrdersResponse]);
 
-  const orderTotal = apiOrdersResponse?.response?.data?.total || 0;
+  // Comprehensive client-side search across orderNumber, MongoDB _id, mobile, customer name, email
+  const filteredOrders = useMemo(() => {
+    if (!orders || orders.length === 0) return [];
+    const search = (params.search || "").trim().toLowerCase();
+
+    return orders.filter((order) => {
+      // 1. Status filter (if not "all")
+      if (params.status && params.status !== "all") {
+        if (order.status?.toLowerCase() !== params.status.toLowerCase()) {
+          return false;
+        }
+      }
+
+      if (!search) return true;
+
+      // Clean search for '#45' -> '45'
+      const cleanSearch = search.startsWith("#") ? search.slice(1).trim() : search;
+
+      // 1. Match orderNumber (e.g. 45 or #45)
+      if (order.orderNumber !== undefined && order.orderNumber !== null) {
+        if (String(order.orderNumber).toLowerCase().includes(cleanSearch)) {
+          return true;
+        }
+      }
+
+      // 2. Match MongoDB _id (e.g. 6aa3d4b822447a37818fcdf3)
+      if (order._id && order._id.toLowerCase().includes(cleanSearch)) {
+        return true;
+      }
+
+      // 3. Match mobile phone numbers
+      const mobiles = [
+        order.address?.mobile,
+        order.address?.alternatePhone,
+        order.address?.phone,
+        order.guestInfo?.mobile,
+        order.user?.phone,
+        order.user?.mobile,
+        order.customer?.mobile,
+        order.customer?.phone,
+      ].filter(Boolean);
+
+      if (mobiles.some((m) => String(m).toLowerCase().includes(cleanSearch))) {
+        return true;
+      }
+
+      // 4. Match customer names
+      const names = [
+        order.address?.name,
+        order.user?.name,
+        order.customer?.name,
+        order.guestInfo?.name,
+      ].filter(Boolean);
+
+      if (names.some((n) => String(n).toLowerCase().includes(search))) {
+        return true;
+      }
+
+      // 5. Match emails
+      const emails = [
+        order.user?.email,
+        order.customer?.email,
+        order.guestInfo?.email,
+        order.address?.email,
+      ].filter(Boolean);
+
+      if (emails.some((e) => String(e).toLowerCase().includes(search))) {
+        return true;
+      }
+
+      return false;
+    });
+  }, [orders, params.search, params.status]);
+
   const isLoading = apiLoading;
   const error = apiError;
 
   useEffect(() => {
-    setOrdersLength(orders?.length);
-  }, [orders, setOrdersLength]);
+    setOrdersLength(filteredOrders?.length || 0);
+  }, [filteredOrders, setOrdersLength]);
 
   const onOpenStatusDialog = (order) => {
     setSelectedOrder(order);
@@ -150,13 +249,15 @@ const OrdersTable = ({
       key: "sr_no",
       label: "Order ID",
       render: (_, row) => (
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-1.5">
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <Typography
               variant="p"
-              className="text-primary font-mono font-medium"
+              className="text-primary font-mono font-semibold text-sm hover:underline cursor-pointer"
+              onClick={() => navigate(`/dashboard/orders/${row._id}`)}
+              title="Click to view order details"
             >
-              {row?.orderNumber ? `#${row.orderNumber}` : row?._id}
+              {row?.orderNumber ? `#${row.orderNumber}` : `#${row?._id?.slice(-6).toUpperCase()}`}
             </Typography>
             {row?.couponCode && (
               <Tooltip>
@@ -171,22 +272,47 @@ const OrdersTable = ({
               </Tooltip>
             )}
           </div>
+          <span className="text-[11px] font-mono text-muted-foreground select-all" title="Mongo Order ID">
+            ID: {row?._id}
+          </span>
         </div>
       ),
     },
     {
       key: "customer",
       label: "Customer",
-      render: (_, row) => (
-        <div className="flex flex-col gap-1">
-          <Typography variant="p" className="font-medium">
-            {row.address?.name || row.customer?.name || "Unknown Customer"}
-          </Typography>
-          <Typography variant="small" className="text-muted-foreground">
-            {row.address?.mobile || row.customer?.email || "No contact info"}
-          </Typography>
-        </div>
-      ),
+      render: (_, row) => {
+        const customerName =
+          row.address?.name ||
+          row.user?.name ||
+          row.customer?.name ||
+          row.guestInfo?.name ||
+          (row.isGuestOrder ? "Guest Customer" : "Customer");
+        const mobile =
+          row.address?.mobile ||
+          row.address?.phone ||
+          row.guestInfo?.mobile ||
+          row.customer?.mobile ||
+          row.user?.phone ||
+          row.user?.mobile;
+
+        return (
+          <div className="flex flex-col gap-0.5">
+            <Typography variant="p" className="font-medium text-sm">
+              {customerName}
+            </Typography>
+            {mobile ? (
+              <span className="text-xs font-mono text-muted-foreground">
+                {mobile}
+              </span>
+            ) : (
+              <span className="text-xs text-muted-foreground/60">
+                No mobile
+              </span>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: "items",
@@ -324,6 +450,14 @@ const OrdersTable = ({
                       icon: FileDown,
                       action: () => downloadInvoiceMutation(order._id),
                     },
+                    {
+                      label:
+                        regeneratingOrderId === order._id
+                          ? "Regenerating..."
+                          : "Regenerate Invoice",
+                      icon: RefreshCw,
+                      action: () => regenerateInvoiceMutation(order._id),
+                    },
                   ]
                 : []),
             ]}
@@ -340,8 +474,14 @@ const OrdersTable = ({
     }));
   };
 
-  const currentPage = params.page || 1;
-  const totalPages = Math.ceil(orderTotal / perPage);
+  const totalPages = Math.max(1, Math.ceil((filteredOrders?.length || 0) / perPage));
+  const currentPage = Math.min(params.page || 1, totalPages);
+
+  const paginatedOrders = useMemo(() => {
+    if (showAllOnSinglePage) return filteredOrders;
+    const start = (currentPage - 1) * perPage;
+    return filteredOrders.slice(start, start + perPage);
+  }, [filteredOrders, currentPage, perPage, showAllOnSinglePage]);
 
   const handleBulkStatusUpdate = () => {
     if (selectedRowIds.length === 0) {
@@ -375,15 +515,16 @@ const OrdersTable = ({
               <Button
                 variant="outline"
                 onClick={() => {
-                  const selectedOrders = orders.filter((o) =>
+                  const selectedOrders = (filteredOrders || []).filter((o) =>
                     selectedRowIds.includes(o._id)
                   );
                   const csv = [
-                    ["Order ID", "Customer", "Status", "Total", "Date"].join(","),
+                    ["Order ID", "Customer", "Mobile", "Status", "Total", "Date"].join(","),
                     ...selectedOrders.map((o) =>
                       [
                         o.orderNumber ? `#${o.orderNumber}` : o._id,
-                        `"${o.address?.name || o.customer?.name || "Unknown"}"`,
+                        `"${o.address?.name || o.user?.name || o.customer?.name || "Unknown"}"`,
+                        `"${o.address?.mobile || o.guestInfo?.mobile || ""}"`,
                         o.status,
                         o.finalTotalAmount || 0,
                         o.createdAt
@@ -410,15 +551,19 @@ const OrdersTable = ({
 
       <CustomTable
         columns={columns}
-        data={orders || []}
+        data={paginatedOrders || []}
         isLoading={isLoading}
         error={error}
         perPage={perPage}
         currentPage={currentPage}
         totalPages={totalPages}
         onPageChange={onPageChange}
-        hidePagination={false}
-        emptyStateMessage="No orders found matching your criteria. Try adjusting your filters or search terms."
+        hidePagination={showAllOnSinglePage}
+        emptyStateMessage={
+          params.search
+            ? `No orders found matching "${params.search}". Try searching by order number (#45), Mongo ID (${orders?.[0]?._id?.slice(0, 8) || "6aa..."}, mobile number, or customer name.`
+            : "No orders found matching your criteria. Try adjusting your filters or search terms."
+        }
         enableRowSelection={true}
         selectedRows={selectedRowIds}
         onRowSelectionChange={setSelectedRowIds}

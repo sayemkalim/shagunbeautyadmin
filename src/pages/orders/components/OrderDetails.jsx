@@ -2,7 +2,29 @@ import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ArrowLeft, Plus, Minus, Save, Trash2, Mail, CreditCard, Edit, Package, Truck, DollarSign, Eye, EyeOff, Copy, Layers, FileDown } from "lucide-react";
+import {
+  ArrowLeft,
+  Plus,
+  Minus,
+  Save,
+  Trash2,
+  Mail,
+  CreditCard,
+  Edit,
+  Package,
+  Truck,
+  DollarSign,
+  Eye,
+  EyeOff,
+  Copy,
+  Layers,
+  FileDown,
+  RefreshCw,
+  MapPin,
+  User,
+  Phone,
+  ExternalLink,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -14,6 +36,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import Typography from "@/components/typography";
 
 import { fetchOrderById } from "../helpers/fetchOrderById";
@@ -21,6 +44,7 @@ import { updateOrder } from "../helpers/updateOrder";
 import { generatePaymentLink } from "../helpers/generatePaymentLink";
 import { fetchOrderBill } from "../helpers/fetchOrderBill";
 import { triggerBillDownload } from "../helpers/triggerBillDownload";
+import { fetchUserById } from "@/pages/users/helpers/fetchUserById";
 import { fetchProducts } from "@/pages/products/components/helpers/fetchProducts";
 import { fetchBundle } from "@/pages/bundles/helpers/fetchBundle";
 import { getStatusBadgeClass } from "../helpers/statusBadge";
@@ -88,6 +112,49 @@ const OrderDetails = () => {
   });
 
   const order = orderResponse?.response?.data;
+
+  // Extract user ID (handles string ID, populated object, or null)
+  const userId = typeof order?.user === "object" ? order?.user?._id : order?.user;
+  const isRegisteredUser = !order?.isGuestOrder && Boolean(userId);
+
+  // Fetch registered user details by user ID
+  const { data: userResponse, isLoading: isUserLoading } = useQuery({
+    queryKey: ["user", userId],
+    queryFn: () => fetchUserById(userId),
+    enabled: Boolean(isRegisteredUser),
+  });
+
+  const registeredUser =
+    userResponse?.response?.data || (typeof order?.user === "object" ? order?.user : null);
+
+  // Customer display details (handles registered users and guest orders)
+  const customerDetails = useMemo(() => {
+    if (order?.isGuestOrder) {
+      return {
+        isGuest: true,
+        name: order?.guestInfo?.name || order?.address?.name || "Guest Customer",
+        email: order?.guestInfo?.email || "Not provided",
+        phone: order?.guestInfo?.mobile || order?.address?.mobile || "Not provided",
+        userId: null,
+      };
+    }
+
+    return {
+      isGuest: false,
+      name:
+        registeredUser?.name ||
+        (isUserLoading ? "Loading..." : order?.address?.name || "N/A"),
+      email:
+        registeredUser?.email ||
+        (isUserLoading ? "Loading..." : "Not provided"),
+      phone:
+        registeredUser?.phone ||
+        registeredUser?.mobile ||
+        (isUserLoading ? "Loading..." : "Not provided"),
+      userId: userId || null,
+      isActive: registeredUser?.isActive,
+    };
+  }, [order, registeredUser, isUserLoading, userId]);
 
   // Fetch products and bundles for adding to order
   const { data: productsResponse } = useQuery({
@@ -244,6 +311,27 @@ const OrderDetails = () => {
     },
     onError: (error) => {
       toast.error(error?.response?.data?.message || "Failed to fetch invoice. Please try again.");
+    },
+  });
+
+  // Regenerate invoice/bill mutation
+  const { mutate: regenerateOrderBillMutation, isLoading: isRegeneratingBill } = useMutation({
+    mutationFn: () => fetchOrderBill({ id: orderId, regenerate: true }),
+    onSuccess: (res) => {
+      if (res?.error || res?.response?.success === false) {
+        toast.error(res?.response?.data?.message || "Failed to regenerate invoice. Please try again.");
+        return;
+      }
+      const downloaded = triggerBillDownload(res?.response?.data);
+      if (!downloaded) {
+        toast.error("Invoice URL not available.");
+      } else {
+        toast.success("Invoice regenerated successfully!");
+        refetchOrderData();
+      }
+    },
+    onError: (error) => {
+      toast.error(error?.response?.data?.message || "Failed to regenerate invoice. Please try again.");
     },
   });
 
@@ -716,44 +804,59 @@ const OrderDetails = () => {
 
   return (
     <div className="container mx-auto px-4 py-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div className="flex items-center gap-4">
+      {/* Minimal Header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-4 border-b">
+        <div className="flex items-center gap-3">
           <Button
-            variant="ghost"
+            variant="outline"
             size="icon"
             onClick={() => navigate("/dashboard/orders")}
+            className="h-9 w-9 rounded-lg shrink-0"
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <Typography variant="h3">Order Details</Typography>
-            <Typography variant="small" className="text-muted-foreground">
-              Order ID: {order._id}
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <Typography variant="h3" className="text-2xl font-bold tracking-tight">
+                Order #{order.orderNumber ?? (order._id ? order._id.slice(-6).toUpperCase() : "")}
+              </Typography>
+              <Badge
+                variant="outline"
+                className={cn("text-xs font-medium uppercase px-2.5 py-0.5", getStatusBadgeClass(order.status))}
+              >
+                {order.status || "PENDING"}
+              </Badge>
+              {order.paymentMode && (
+                <Badge variant="outline" className="text-xs font-mono px-2 py-0.5">
+                  {order.paymentMode}
+                </Badge>
+              )}
+            </div>
+            <Typography variant="small" className="text-muted-foreground text-xs block mt-0.5">
+              ID: {order._id} • Placed {order.createdAt ? format(new Date(order.createdAt), "dd MMM yyyy, hh:mm a") : "N/A"}
             </Typography>
           </div>
         </div>
-        
-        <div className="flex flex-col sm:flex-row gap-2">
-          {/* Status Update Section */}
-          <div className="flex items-center gap-2">
-            <Typography variant="small" className="text-muted-foreground">Status:</Typography>
+
+        {/* Header Action Bar */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Status Changer */}
+          <div className="flex items-center gap-1.5 bg-background border rounded-lg px-2.5 py-1">
+            <span className="text-xs font-medium text-muted-foreground">Status:</span>
             <Select value={selectedStatus} onValueChange={handleStatusChange}>
-              <SelectTrigger className="w-32">
+              <SelectTrigger className="h-7 w-28 text-xs border-0 shadow-none px-1 focus:ring-0">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {ORDER_STATUSES.map((status) => (
-                  <SelectItem key={status} value={status}>
+                  <SelectItem key={status} value={status} className="text-xs">
                     {status.toUpperCase()}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             {statusChanged && (
-              <Typography variant="small" className="text-amber-600 dark:text-amber-400 font-medium">
-                Status Changed
-              </Typography>
+              <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" title="Status modified" />
             )}
           </div>
 
@@ -763,320 +866,349 @@ const OrderDetails = () => {
             size="sm"
             onClick={handleGeneratePaymentLink}
             disabled={isGeneratingPaymentLink}
-            className="flex items-center gap-2"
+            className="h-9 gap-1.5 text-xs font-medium"
           >
-            <CreditCard className="h-4 w-4" />
-            {isGeneratingPaymentLink ? "Generating..." : "Generate Payment Link"}
+            <CreditCard className="h-3.5 w-3.5" />
+            {isGeneratingPaymentLink ? "Generating..." : "Payment Link"}
           </Button>
 
-          {/* Download Invoice Button */}
+          {/* Download & Regenerate Invoice Buttons */}
           {order.status === "pending" ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <span className="inline-flex">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled
-                    className="flex items-center gap-2"
-                  >
-                    <FileDown className="h-4 w-4" />
-                    Download Invoice
+                  <Button variant="outline" size="sm" disabled className="h-9 gap-1.5 text-xs">
+                    <FileDown className="h-3.5 w-3.5" />
+                    Invoice
                   </Button>
                 </span>
               </TooltipTrigger>
               <TooltipContent>Available once the order is confirmed</TooltipContent>
             </Tooltip>
           ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => fetchOrderBillMutation()}
-              disabled={isFetchingBill}
-              className="flex items-center gap-2"
-            >
-              <FileDown className="h-4 w-4" />
-              {isFetchingBill ? "Loading..." : "Download Invoice"}
-            </Button>
+            <div className="inline-flex items-center rounded-lg border bg-background p-0.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => fetchOrderBillMutation()}
+                disabled={isFetchingBill || isRegeneratingBill}
+                className="h-8 gap-1.5 text-xs px-2.5"
+                title="Download current invoice PDF"
+              >
+                <FileDown className="h-3.5 w-3.5" />
+                {isFetchingBill ? "Downloading..." : "Invoice"}
+              </Button>
+              <div className="h-4 w-px bg-border my-auto" />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => regenerateOrderBillMutation()}
+                disabled={isFetchingBill || isRegeneratingBill}
+                className="h-8 gap-1.5 text-xs px-2.5"
+                title="Regenerate invoice with latest order details and phone number"
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5", isRegeneratingBill && "animate-spin")} />
+                {isRegeneratingBill ? "Regenerating..." : "Regenerate"}
+              </Button>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Order Information Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* Customer Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Customer Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div>
-              <Typography variant="small" className="text-muted-foreground">Name</Typography>
-              <Typography variant="p" className="font-medium">{order.address?.name || 'N/A'}</Typography>
-            </div>
-            <div>
-              <Typography variant="small" className="text-muted-foreground">Email</Typography>
-              <Typography variant="p">{order.user?.email || 'N/A'}</Typography>
-            </div>
-            <div>
-              <Typography variant="small" className="text-muted-foreground">Phone</Typography>
-              <Typography variant="p">{order.address?.mobile || 'N/A'}</Typography>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Order Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Order Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div>
-              <Typography variant="small" className="text-muted-foreground">Order Date</Typography>
-              <Typography variant="p" className="font-medium">
-                {order.createdAt ? format(new Date(order.createdAt), "dd/MM/yyyy hh:mm a") : 'N/A'}
-              </Typography>
-            </div>
-            <div>
-              <Typography variant="small" className="text-muted-foreground">Last Updated</Typography>
-              <Typography variant="p" className="font-medium">
-                {order.updatedAt ? format(new Date(order.updatedAt), "dd/MM/yyyy hh:mm a") : 'N/A'}
-              </Typography>
-            </div>
-            <div>
-              <Typography variant="small" className="text-muted-foreground">Status</Typography>
+      {/* Top 3 Cards Row: Customer Info | Shipping Address | Payment & Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
+        {/* 1. Customer Information Card */}
+        <Card className="border shadow-xs overflow-hidden flex flex-col h-full">
+          <CardHeader className="pb-3 border-b bg-muted/20">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Badge
-                  variant={
-                    order.status === "delivered"
-                      ? "success"
-                      : order.status === "cancelled"
-                      ? "destructive"
-                      : order.status === "pending"
-                      ? "outline"
-                      : "secondary"
-                  }
-                >
-                  {order.status?.toUpperCase() || 'UNKNOWN'}
-                </Badge>
-                {order.paymentMode && (
-                  <Badge variant="outline">{order.paymentMode}</Badge>
+                <User className="h-4 w-4 text-primary" />
+                <CardTitle className="text-base font-semibold">Customer Information</CardTitle>
+              </div>
+              <Badge
+                variant={customerDetails.isGuest ? "secondary" : "outline"}
+                className={cn(
+                  "text-xs font-normal",
+                  !customerDetails.isGuest &&
+                    "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800"
+                )}
+              >
+                {customerDetails.isGuest ? "Guest Order" : "Registered User"}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-4 space-y-4 text-sm flex-1 flex flex-col justify-between">
+            <div className="space-y-4">
+              {/* Customer Avatar & Name */}
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Avatar className="h-10 w-10 border shrink-0">
+                    <AvatarFallback className="bg-primary/10 text-primary font-semibold text-sm">
+                      {customerDetails.name?.[0]?.toUpperCase() || "U"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <Typography variant="p" className="font-semibold truncate text-sm">
+                      {customerDetails.name}
+                    </Typography>
+                    <span className="text-xs text-muted-foreground block">
+                      {customerDetails.isGuest ? "Guest Checkout" : "Account Holder"}
+                    </span>
+                  </div>
+                </div>
+                {!customerDetails.isGuest && customerDetails.userId && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate(`/dashboard/users/${customerDetails.userId}`)}
+                    className="h-8 px-2 text-xs text-primary hover:text-primary gap-1 shrink-0"
+                    title="View user details"
+                  >
+                    <span>Profile</span>
+                    <ExternalLink className="h-3 w-3" />
+                  </Button>
                 )}
               </div>
-            </div>
-            <div>
-              <Typography variant="small" className="text-muted-foreground">Items Count</Typography>
-              <Typography variant="p" className="font-medium">{orderItems.length} items</Typography>
-            </div>
-          </CardContent>
-        </Card>
 
-        {/* Shipping Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Shipping Address</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div>
-              <Typography variant="p" className="font-medium">{order.address?.address || 'N/A'}</Typography>
-              <Typography variant="p">{order.address?.city || 'N/A'}, {order.address?.state || 'N/A'}</Typography>
-              <Typography variant="p">{order.address?.pincode || 'N/A'}</Typography>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Payment Details */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5" />
-              Payment Details
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {order.utr_number && (
-              <div>
-                <Typography variant="small" className="text-muted-foreground">UTR Number</Typography>
-                <Typography variant="p" className="font-medium font-mono text-sm">
-                  {order.utr_number}
-                </Typography>
-              </div>
-            )}
-            <div>
-              <Typography variant="small" className="text-muted-foreground">Payment Link ID</Typography>
-              <Typography variant="p" className="font-medium font-mono text-sm">
-                {order.paymentLinkId || 'N/A'}
-              </Typography>
-            </div>
-            <div>
-              <Typography variant="small" className="text-muted-foreground">Payment Link</Typography>
-              {order.paymentLink ? (
-                <div className="space-y-2">
-                  <Typography variant="p" className="font-mono text-sm break-all">
-                    {order.paymentLink}
+              {/* Email */}
+              <div className="flex items-start gap-2.5 pt-2 border-t">
+                <Mail className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <Typography variant="small" className="text-muted-foreground text-xs block">
+                    Email Address
                   </Typography>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleCopyPaymentLink}
-                    className="flex items-center gap-2"
-                  >
-                    <Copy className="h-4 w-4" />
-                    Copy Link
-                  </Button>
+                  {customerDetails.email && customerDetails.email !== "Not provided" && customerDetails.email !== "N/A" ? (
+                    <a
+                      href={`mailto:${customerDetails.email}`}
+                      className="text-sm font-medium text-primary hover:underline truncate block"
+                    >
+                      {customerDetails.email}
+                    </a>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">Not provided</span>
+                  )}
                 </div>
-              ) : (
-                <Typography variant="p" className="text-muted-foreground">No payment link available</Typography>
+              </div>
+
+              {/* Registered Mobile */}
+              <div className="flex items-start gap-2.5">
+                <Phone className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                <div>
+                  <Typography variant="small" className="text-muted-foreground text-xs block">
+                    Registered Mobile No
+                  </Typography>
+                  {customerDetails.phone && customerDetails.phone !== "Not provided" && customerDetails.phone !== "N/A" ? (
+                    <a
+                      href={`tel:${customerDetails.phone}`}
+                      className="text-sm font-medium text-primary hover:underline block"
+                    >
+                      {customerDetails.phone}
+                    </a>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">Not provided</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 2. Shipping Address Card */}
+        <Card className="border shadow-xs overflow-hidden flex flex-col h-full">
+          <CardHeader className="pb-3 border-b bg-muted/20">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-primary" />
+                <CardTitle className="text-base font-semibold">Shipping Address</CardTitle>
+              </div>
+              {order.address?.addressType && (
+                <Badge variant="outline" className="capitalize text-xs font-normal">
+                  {order.address.addressType}
+                </Badge>
               )}
             </div>
+          </CardHeader>
+          <CardContent className="pt-4 space-y-3.5 text-sm flex-1 flex flex-col justify-between">
+            <div className="space-y-3.5">
+              {/* Recipient Name */}
+              <div className="flex items-start gap-2.5">
+                <User className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                <div>
+                  <Typography variant="small" className="text-muted-foreground text-xs block">
+                    Recipient Name
+                  </Typography>
+                  <Typography variant="p" className="font-semibold text-sm">
+                    {order.address?.name || "N/A"}
+                  </Typography>
+                </div>
+              </div>
+
+              {/* Delivery Contact Phone */}
+              <div className="flex items-start gap-2.5">
+                <Phone className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                <div>
+                  <Typography variant="small" className="text-muted-foreground text-xs block">
+                    Delivery Contact Phone
+                  </Typography>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {order.address?.mobile ? (
+                      <a
+                        href={`tel:${order.address.mobile}`}
+                        className="font-medium text-sm text-primary hover:underline"
+                      >
+                        {order.address.mobile}
+                      </a>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">N/A</span>
+                    )}
+                    {order.address?.alternatePhone && (
+                      <span className="text-xs text-muted-foreground">
+                        (Alt:{" "}
+                        <a href={`tel:${order.address.alternatePhone}`} className="hover:underline">
+                          {order.address.alternatePhone}
+                        </a>
+                        )
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Complete Address */}
+              <div className="flex items-start gap-2.5 pt-2 border-t">
+                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                <div className="space-y-1">
+                  <Typography variant="small" className="text-muted-foreground text-xs block">
+                    Delivery Address
+                  </Typography>
+                  <Typography variant="p" className="text-sm leading-relaxed font-normal">
+                    {order.address?.address || "N/A"}
+                  </Typography>
+                  {(order.address?.locality || order.address?.landmark) && (
+                    <Typography variant="small" className="text-muted-foreground text-xs block">
+                      {[
+                        order.address?.locality,
+                        order.address?.landmark && `Landmark: ${order.address.landmark}`,
+                      ]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </Typography>
+                  )}
+                  <Typography variant="p" className="text-sm font-semibold mt-1">
+                    {[order.address?.city, order.address?.state].filter(Boolean).join(", ")}
+                    {order.address?.pincode ? ` - ${order.address.pincode}` : ""}
+                  </Typography>
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
-      </div>
 
-      {/* Shipping Details & Email Tracking */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Shipping Details */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Truck className="h-5 w-5" />
-              Shipping Details
-            </CardTitle>
+        {/* 3. Payment & Status Overview Card */}
+        <Card className="border shadow-xs overflow-hidden flex flex-col h-full">
+          <CardHeader className="pb-3 border-b bg-muted/20">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-4 w-4 text-primary" />
+                <CardTitle className="text-base font-semibold">Payment & Overview</CardTitle>
+              </div>
+              <Badge
+                variant={order.paymentStatus === "paid" ? "default" : "secondary"}
+                className="text-xs capitalize"
+              >
+                {order.paymentStatus || "Pending"}
+              </Badge>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {order.shippingDetails && (
-              <>
+          <CardContent className="pt-4 space-y-3.5 text-sm flex-1 flex flex-col justify-between">
+            <div className="space-y-3.5">
+              <div className="grid grid-cols-2 gap-3 pb-2 border-b">
                 <div>
-                  <Typography variant="small" className="text-muted-foreground">Delivery Zone</Typography>
-                  <Typography variant="p" className="font-medium">{order.shippingDetails.zoneName || 'N/A'}</Typography>
-                </div>
-                <div>
-                  <Typography variant="small" className="text-muted-foreground">Pricing Type</Typography>
-                  <Typography variant="p">{order.shippingDetails.pricingType || 'N/A'}</Typography>
-                </div>
-                <div>
-                  <Typography variant="small" className="text-muted-foreground">Manual Override</Typography>
-                  <Badge variant={order.shippingDetails.isManual ? "destructive" : "secondary"}>
-                    {order.shippingDetails.isManual ? "Yes" : "No"}
+                  <Typography variant="small" className="text-muted-foreground text-xs block">
+                    Payment Method
+                  </Typography>
+                  <Badge variant="outline" className="font-mono text-xs mt-1">
+                    {order.paymentMode || "COD"}
                   </Badge>
                 </div>
                 <div>
-                  <Typography variant="small" className="text-muted-foreground">Calculated At</Typography>
-                  <Typography variant="p">
-                    {order.shippingDetails.calculatedAt ? 
-                      format(new Date(order.shippingDetails.calculatedAt), "dd/MM/yyyy hh:mm a") : 'N/A'}
+                  <Typography variant="small" className="text-muted-foreground text-xs block">
+                    Order Total
                   </Typography>
+                  <span className="font-bold text-base text-[var(--color-success)] block mt-0.5">
+                    ₹{finalTotal.toFixed(2)}
+                  </span>
                 </div>
-              </>
-            )}
-            
-            {/* Shipping Cost Editor */}
-            <div className="border-t pt-4">
-              <div className="flex items-center justify-between mb-2">
-                <Typography variant="small" className="text-muted-foreground">Shipping Cost</Typography>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={toggleShippingEdit}
-                  className="h-6 w-6 p-0"
-                >
-                  {isEditingShipping ? <EyeOff className="h-4 w-4" /> : <Edit className="h-4 w-4" />}
-                </Button>
               </div>
-              {isEditingShipping ? (
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    value={shippingCost}
-                    onChange={(e) => handleShippingCostChange(parseFloat(e.target.value) || 0)}
-                    className="w-24"
-                    min="0"
-                    step="0.01"
-                  />
-                  <Typography variant="small">₹</Typography>
-                  {shippingCostChanged && (
-                    <Typography variant="small" className="text-amber-600 dark:text-amber-400 font-medium">
-                      ● Changed
-                    </Typography>
-                  )}
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <Typography variant="small" className="text-muted-foreground text-xs block">
+                    Order Status
+                  </Typography>
+                  <Badge
+                    variant="outline"
+                    className={cn("text-xs font-medium uppercase mt-1", getStatusBadgeClass(order.status))}
+                  >
+                    {order.status || "PENDING"}
+                  </Badge>
                 </div>
-              ) : (
-                <Typography variant="p" className="font-medium">₹{shippingCost.toFixed(2)}</Typography>
+                <div>
+                  <Typography variant="small" className="text-muted-foreground text-xs block">
+                    Placed On
+                  </Typography>
+                  <span className="font-medium block mt-0.5">
+                    {order.createdAt ? format(new Date(order.createdAt), "dd MMM yyyy, hh:mm a") : "N/A"}
+                  </span>
+                </div>
+              </div>
+
+              {order.utr_number && (
+                <div className="pt-2 border-t">
+                  <Typography variant="small" className="text-muted-foreground text-xs block">
+                    UTR Number
+                  </Typography>
+                  <span className="font-mono text-xs font-semibold block mt-0.5">
+                    {order.utr_number}
+                  </span>
+                </div>
+              )}
+
+              {order.paymentLinkId && (
+                <div className="pt-2 border-t">
+                  <Typography variant="small" className="text-muted-foreground text-xs block">
+                    Payment Link ID
+                  </Typography>
+                  <span className="font-mono text-xs text-muted-foreground block mt-0.5">
+                    {order.paymentLinkId}
+                  </span>
+                </div>
+              )}
+
+              {order.paymentLink && (
+                <div className="pt-2 border-t space-y-1.5">
+                  <Typography variant="small" className="text-muted-foreground text-xs block">
+                    Payment Link
+                  </Typography>
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      readOnly
+                      value={order.paymentLink}
+                      className="h-8 text-xs font-mono bg-muted/40"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCopyPaymentLink}
+                      className="h-8 px-2.5 text-xs shrink-0 gap-1"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      Copy
+                    </Button>
+                  </div>
+                </div>
               )}
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Email Tracking */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Mail className="h-5 w-5" />
-              Email Tracking
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {order.emailTracking && (
-              <>
-                {/* Confirmation Email */}
-                <div>
-                  <Typography variant="small" className="text-muted-foreground">Confirmation Email</Typography>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Badge variant={
-                      order.emailTracking.confirmation?.status === "sent" ? "success" : 
-                      order.emailTracking.confirmation?.status === "failed" ? "destructive" : "secondary"
-                    }>
-                      {order.emailTracking.confirmation?.status?.toUpperCase() || 'UNKNOWN'}
-                    </Badge>
-                    {order.emailTracking.confirmation?.attempts > 0 && (
-                      <Typography variant="small" className="text-muted-foreground">
-                        ({order.emailTracking.confirmation.attempts} attempts)
-                      </Typography>
-                    )}
-                  </div>
-                  {order.emailTracking.confirmation?.opened && (
-                    <Typography variant="small" className="text-[var(--color-success)]">
-                      Opened {order.emailTracking.confirmation.openCount} times
-                    </Typography>
-                  )}
-                  {order.emailTracking.confirmation?.clicked && (
-                    <Typography variant="small" className="text-blue-600 dark:text-blue-400">
-                      Clicked {order.emailTracking.confirmation.clickCount} times
-                    </Typography>
-                  )}
-                </div>
-
-                {/* Status Updates */}
-                <div>
-                  <Typography variant="small" className="text-muted-foreground">Status Updates</Typography>
-                  <div className="space-y-2 mt-2 max-h-32 overflow-y-auto">
-                    {order.emailTracking.statusUpdates?.slice(0, 3).map((update, index) => (
-                      <div key={index} className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2">
-                          <Badge variant={
-                            update.emailStatus === "sent" ? "success" : 
-                            update.emailStatus === "failed" ? "destructive" : "secondary"
-                          }>
-                            {update.status}
-                          </Badge>
-                          <Typography variant="small" className="text-muted-foreground">
-                            {update.emailStatus}
-                          </Typography>
-                        </div>
-                        <Typography variant="small" className="text-muted-foreground">
-                          {update.attempts > 0 && `${update.attempts} attempts`}
-                        </Typography>
-                      </div>
-                    ))}
-                    {order.emailTracking.statusUpdates?.length > 3 && (
-                      <Typography variant="small" className="text-muted-foreground">
-                        +{order.emailTracking.statusUpdates.length - 3} more updates
-                      </Typography>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
           </CardContent>
         </Card>
       </div>
@@ -1520,101 +1652,295 @@ const OrderDetails = () => {
             )}
           </div>
 
-          {/* Order Total */}
-          <div className="mt-6 pt-4 border-t">
-            <div className="space-y-3">
-              {/* Items Total (Original Total before discount) */}
-              <div className="flex justify-between items-center">
-                <Typography variant="p" className="text-muted-foreground">Items Total:</Typography>
-                <Typography variant="p" className="font-medium">₹{originalItemsTotal.toFixed(2)}</Typography>
+          {/* Order Payment Summary */}
+          <div className="mt-6 pt-5 border-t flex flex-col md:flex-row md:justify-between md:items-start gap-6">
+            <div className="space-y-2 max-w-sm">
+              <Typography variant="small" className="font-semibold text-muted-foreground uppercase tracking-wider text-[11px]">
+                Payment Breakdown
+              </Typography>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Item prices and product discounts are calculated based on applicable catalog pricing. Shipping charges can be customized using the edit button.
+              </p>
+              {order.paymentMode && (
+                <div className="inline-flex items-center gap-2 text-xs bg-muted/40 px-3 py-1.5 rounded-lg border">
+                  <CreditCard className="h-3.5 w-3.5 text-primary" />
+                  <span className="text-muted-foreground">Mode:</span>
+                  <span className="font-semibold font-mono uppercase">{order.paymentMode}</span>
+                  <span className="text-muted-foreground">•</span>
+                  <span className="text-muted-foreground">Status:</span>
+                  <Badge variant={order.paymentStatus === "paid" ? "default" : "secondary"} className="text-[10px] px-1.5 py-0 capitalize">
+                    {order.paymentStatus || "Pending"}
+                  </Badge>
+                </div>
+              )}
+            </div>
+
+            <div className="w-full md:w-80 lg:w-96 space-y-2.5 bg-muted/20 p-4 rounded-xl border">
+              {/* Items Total */}
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">Items Total:</span>
+                <span className="font-medium">₹{originalItemsTotal.toFixed(2)}</span>
               </div>
 
               {/* Product Discount */}
               {productDiscount > 0 && (
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                    <Typography variant="p" className="text-[var(--color-success)]">
-                      Discount:
-                    </Typography>
+                <div className="flex justify-between items-center text-sm">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[var(--color-success)] font-medium">Discount:</span>
                     <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-[var(--color-success)] border-[var(--color-success)]/30 font-medium">
                       Save ₹{productDiscount.toFixed(2)}
                     </Badge>
                   </div>
-                  <Typography variant="p" className="font-medium text-[var(--color-success)]">
+                  <span className="font-semibold text-[var(--color-success)]">
                     −₹{productDiscount.toFixed(2)}
-                  </Typography>
+                  </span>
                 </div>
               )}
 
               {/* Coupon Discount */}
               {order.coupon && (
-                <div className="flex justify-between items-start">
+                <div className="flex justify-between items-start text-sm">
                   <div>
-                    <Typography variant="p" className="text-[var(--color-success)]">
-                      Coupon ({order.coupon.code})
-                    </Typography>
-                    <Typography variant="small" className="text-muted-foreground">
+                    <span className="text-[var(--color-success)] font-medium">Coupon ({order.coupon.code})</span>
+                    <span className="text-muted-foreground text-xs block">
                       {formatCouponDiscount(order.coupon)}
-                    </Typography>
+                    </span>
                   </div>
-                  <Typography variant="p" className="font-medium text-[var(--color-success)]">
+                  <span className="font-semibold text-[var(--color-success)]">
                     −₹{(order.couponDiscountAmount || 0).toFixed(2)}
-                  </Typography>
+                  </span>
                 </div>
               )}
 
               {/* Shipping Cost */}
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <Typography variant="p" className="text-muted-foreground">Shipping Cost:</Typography>
+              <div className="flex justify-between items-center text-sm pt-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground">Shipping Cost:</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={toggleShippingEdit}
+                    className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                    title={isEditingShipping ? "Close shipping editor" : "Edit shipping cost"}
+                  >
+                    {isEditingShipping ? <EyeOff className="h-3.5 w-3.5" /> : <Edit className="h-3.5 w-3.5" />}
+                  </Button>
                   {shippingCostChanged && (
-                    <Typography variant="small" className="text-amber-600 dark:text-amber-400 font-medium">
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-amber-600 border-amber-300 dark:text-amber-400 font-medium">
                       ● Modified
-                    </Typography>
+                    </Badge>
                   )}
                 </div>
-                <Typography variant="p">₹{shippingCost.toFixed(2)}</Typography>
+                {isEditingShipping ? (
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs font-medium">₹</span>
+                    <Input
+                      type="number"
+                      value={shippingCost}
+                      onChange={(e) => handleShippingCostChange(parseFloat(e.target.value) || 0)}
+                      className="h-7 w-20 text-right font-medium text-xs"
+                      min="0"
+                      step="0.01"
+                      autoFocus
+                    />
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <span className="font-medium">₹{shippingCost.toFixed(2)}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={toggleShippingEdit}
+                      className="h-6 px-1.5 text-xs text-muted-foreground hover:text-primary gap-1"
+                    >
+                      <Edit className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
               </div>
               
               {/* Final Total */}
-              <div className="flex justify-between items-center pt-2 border-t">
-                <Typography variant="h4">Final Total:</Typography>
-                <Typography variant="h4" className="text-[var(--color-success)] font-bold">
+              <div className="flex justify-between items-center pt-3 border-t">
+                <span className="text-base font-bold">Final Total:</span>
+                <span className="text-xl font-bold text-[var(--color-success)]">
                   ₹{finalTotal.toFixed(2)}
-                </Typography>
+                </span>
               </div>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Update Order Button */}
-      <div className="flex justify-start">
-        <Button
-          onClick={handleUpdateOrder}
-          disabled={isUpdating}
-          className={cn(
-            "px-8 py-3 text-base font-semibold",
-            (hasChanges || statusChanged || shippingCostChanged) &&
-              "bg-[var(--color-success)] text-white hover:brightness-95"
-          )}
-          size="lg"
-        >
-          <Save className="h-5 w-5 mr-2" />
-          {isUpdating ? "Updating..." : 
-           (hasChanges || statusChanged || shippingCostChanged) ? "Update Order ●" : "Update Order"}
-        </Button>
-        
-        {/* Change indicator next to button */}
-        {(hasChanges || statusChanged || shippingCostChanged) && (
-          <div className="flex items-center ml-4">
-            <Typography variant="small" className="text-amber-600 dark:text-amber-400 font-medium">
-              {[hasChanges && "Items", statusChanged && "Status", shippingCostChanged && "Shipping"]
-                .filter(Boolean).join(" & ")} Changed
+          {/* Action Bar for Changes */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border bg-card shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <Button
+                onClick={handleUpdateOrder}
+                disabled={isUpdating}
+                className={cn(
+                  "font-medium shadow-xs transition-all",
+                  (hasChanges || statusChanged || shippingCostChanged) &&
+                    "bg-emerald-600 hover:bg-emerald-700 text-white"
+                )}
+                size="default"
+              >
+                <Save className="h-4 w-4 mr-2" />
+                {isUpdating ? "Saving..." : (hasChanges || statusChanged || shippingCostChanged) ? "Save Changes ●" : "Save Changes"}
+              </Button>
+              {(hasChanges || statusChanged || shippingCostChanged) && (
+                <Badge variant="outline" className="text-amber-600 border-amber-300 dark:text-amber-400 font-medium text-xs">
+                  ● Unsaved: {[hasChanges && "Items", statusChanged && "Status", shippingCostChanged && "Shipping"].filter(Boolean).join(", ")}
+                </Badge>
+              )}
+            </div>
+            <Typography variant="small" className="text-muted-foreground text-xs">
+              Status, quantities, or shipping changes will be saved to the database.
             </Typography>
           </div>
-        )}
-      </div>
+
+          {/* Logistics & Tracking Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Shipping Details */}
+            <Card className="border shadow-xs">
+              <CardHeader className="pb-3 border-b bg-muted/20">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Truck className="h-4 w-4 text-primary" />
+                    <CardTitle className="text-sm font-semibold">Delivery & Zone</CardTitle>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={toggleShippingEdit}
+                    className="h-6 px-2 text-xs gap-1 text-primary hover:text-primary"
+                  >
+                    {isEditingShipping ? (
+                      <>
+                        <EyeOff className="h-3 w-3" />
+                        <span>Cancel</span>
+                      </>
+                    ) : (
+                      <>
+                        <Edit className="h-3 w-3" />
+                        <span>Edit Price</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-3.5 space-y-2.5 text-xs">
+                {order.shippingDetails ? (
+                  <>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Delivery Zone</span>
+                      <span className="font-medium">{order.shippingDetails.zoneName || "Standard"}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Pricing Type</span>
+                      <span className="font-medium capitalize">{order.shippingDetails.pricingType || "Default"}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Manual Override</span>
+                      <Badge variant={order.shippingDetails.isManual || shippingCostChanged ? "destructive" : "secondary"} className="text-[10px] px-1.5 py-0">
+                        {order.shippingDetails.isManual || shippingCostChanged ? "Yes" : "No"}
+                      </Badge>
+                    </div>
+                    {order.shippingDetails.calculatedAt && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Calculated At</span>
+                        <span className="text-muted-foreground">
+                          {format(new Date(order.shippingDetails.calculatedAt), "dd/MM/yyyy hh:mm a")}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-muted-foreground">Standard delivery calculation applied</p>
+                )}
+
+                {/* Live Shipping Price Editor */}
+                <div className="pt-2 border-t flex justify-between items-center">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-muted-foreground font-medium">Shipping Cost:</span>
+                    {shippingCostChanged && (
+                      <Badge variant="outline" className="text-[10px] px-1 py-0 text-amber-600 border-amber-300">
+                        Modified
+                      </Badge>
+                    )}
+                  </div>
+                  {isEditingShipping ? (
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs font-medium">₹</span>
+                      <Input
+                        type="number"
+                        value={shippingCost}
+                        onChange={(e) => handleShippingCostChange(parseFloat(e.target.value) || 0)}
+                        className="h-7 w-20 text-right text-xs px-2 font-medium"
+                        min="0"
+                        step="0.01"
+                      />
+                    </div>
+                  ) : (
+                    <span className="font-semibold text-sm">₹{shippingCost.toFixed(2)}</span>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Email Tracking */}
+            <Card className="border shadow-xs">
+              <CardHeader className="pb-3 border-b bg-muted/20">
+                <div className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-primary" />
+                  <CardTitle className="text-sm font-semibold">Email Tracking</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-3.5 space-y-2.5 text-xs">
+                {order.emailTracking?.confirmation ? (
+                  <>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Confirmation Email</span>
+                      <Badge
+                        variant={
+                          order.emailTracking.confirmation?.status === "sent"
+                            ? "default"
+                            : order.emailTracking.confirmation?.status === "failed"
+                            ? "destructive"
+                            : "secondary"
+                        }
+                        className="text-[10px] px-1.5 py-0 uppercase"
+                      >
+                        {order.emailTracking.confirmation?.status || "UNKNOWN"}
+                      </Badge>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Attempts / Engagement</span>
+                      <span className="text-muted-foreground">
+                        {order.emailTracking.confirmation.attempts || 0} attempts •{" "}
+                        {order.emailTracking.confirmation.opened
+                          ? `Opened (${order.emailTracking.confirmation.openCount})`
+                          : "Unopened"}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-muted-foreground">No confirmation email data yet</p>
+                )}
+                {Array.isArray(order.emailTracking?.statusUpdates) && order.emailTracking.statusUpdates.length > 0 && (
+                  <div className="pt-2 border-t space-y-1">
+                    <span className="text-muted-foreground block text-[11px]">Recent Updates:</span>
+                    {order.emailTracking.statusUpdates.slice(0, 2).map((upd, idx) => (
+                      <div key={idx} className="flex justify-between text-[11px]">
+                        <span className="capitalize">{upd.status}</span>
+                        <Badge variant="outline" className="text-[10px]">{upd.emailStatus}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
 
       {/* Item Image Fullscreen Preview Dialog */}
       <Dialog open={!!previewImage} onOpenChange={() => setPreviewImage(null)}>

@@ -24,6 +24,7 @@ const CustomActionMenu = ({
   handleSearch,
   disableAdd = false,
   disableBulkUpload = true,
+  onBulkUpload,
   disableSearch = false,
   searchText,
   setOpenDialog,
@@ -36,6 +37,7 @@ const CustomActionMenu = ({
   onBulkExport,
   bulkExportLabel = "Bulk Export",
   filters,
+  searchPlaceholder = "Search",
 }) => {
   const hasFilters =
     showDateRangePicker || showRowSelection || Boolean(filters) || !disableBulkExport;
@@ -50,7 +52,7 @@ const CustomActionMenu = ({
       <div className="flex flex-wrap items-center gap-2 md:gap-3">
         {!disableSearch && (
           <Input
-            placeholder="Search"
+            placeholder={searchPlaceholder}
             className={`min-w-[150px] ${disableBulkUpload ? "w-80" : "w-48"}`}
             value={searchText}
             onChange={handleSearch}
