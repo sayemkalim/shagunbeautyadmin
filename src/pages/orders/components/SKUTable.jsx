@@ -132,11 +132,13 @@ const SKUTable = ({ productsWithOrders = [], isLoading = false }) => {
         const isTruncated = name.length > 30;
         const displayName = isTruncated ? `${name.slice(0, 30)}...` : name;
 
+        const productImage = product.banner_image || (Array.isArray(product.images) ? product.images[0] : null);
+
         return (
           <div className="flex items-center gap-3">
-            {product.banner_image ? (
+            {productImage ? (
               <img
-                src={product.banner_image}
+                src={productImage}
                 alt={product.name}
                 className="w-12 h-12 object-cover rounded-lg"
               />
@@ -277,10 +279,10 @@ const SKUTable = ({ productsWithOrders = [], isLoading = false }) => {
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
-              {selectedProduct?.product?.banner_image && (
+              {(selectedProduct?.product?.banner_image || (Array.isArray(selectedProduct?.product?.images) ? selectedProduct?.product?.images[0] : null)) && (
                 <img
-                  src={selectedProduct.product.banner_image}
-                  alt={selectedProduct.product.name}
+                  src={selectedProduct?.product?.banner_image || selectedProduct?.product?.images?.[0]}
+                  alt={selectedProduct?.product?.name}
                   className="w-12 h-12 object-cover rounded-lg"
                 />
               )}

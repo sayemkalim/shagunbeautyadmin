@@ -68,6 +68,9 @@ const OrderDetails = () => {
   const [productSearchText, setProductSearchText] = useState("");
   const [bundleSearchText, setBundleSearchText] = useState("");
 
+  // State for image preview dialog
+  const [previewImage, setPreviewImage] = useState(null);
+
   const ORDER_STATUSES = [
     "pending",
     "processing", 
@@ -106,6 +109,82 @@ const OrderDetails = () => {
     });
     return map;
   }, [productsResponse]);
+
+  // Lookup map of fresh bundle data by bundle id
+  const bundlesById = useMemo(() => {
+    const map = {};
+    (bundlesResponse?.data?.data || []).forEach((bundle) => {
+      map[bundle._id] = bundle;
+    });
+    return map;
+  }, [bundlesResponse]);
+
+  // Helper to extract image URL for an item (product or bundle)
+  const getItemImage = (item) => {
+    if (!item) return null;
+
+    // Direct image properties on item
+    if (item.banner_image) return item.banner_image;
+    if (typeof item.image === "string" && item.image) return item.image;
+    if (Array.isArray(item.images) && item.images.length > 0) {
+      const first = item.images[0];
+      return typeof first === "string" ? first : first?.url || null;
+    }
+
+    // Direct product object on item
+    if (item.product && typeof item.product === "object") {
+      const p = item.product;
+      if (p.banner_image) return p.banner_image;
+      if (Array.isArray(p.images) && p.images.length > 0) {
+        const first = p.images[0];
+        return typeof first === "string" ? first : first?.url || null;
+      }
+      if (typeof p.images === "string" && p.images) return p.images;
+      if (typeof p.image === "string" && p.image) return p.image;
+      if (p.thumbnail) return p.thumbnail;
+    }
+
+    // Lookup product from productsById
+    const productId = item.product?._id || (typeof item.product === "string" ? item.product : null) || item.productId;
+    if (productId && productsById[productId]) {
+      const p = productsById[productId];
+      if (p.banner_image) return p.banner_image;
+      if (Array.isArray(p.images) && p.images.length > 0) {
+        const first = p.images[0];
+        return typeof first === "string" ? first : first?.url || null;
+      }
+      if (typeof p.images === "string" && p.images) return p.images;
+      if (p.image) return p.image;
+    }
+
+    // Direct bundle object on item
+    if (item.bundle && typeof item.bundle === "object") {
+      const b = item.bundle;
+      if (b.banner_image) return b.banner_image;
+      if (Array.isArray(b.images) && b.images.length > 0) {
+        const first = b.images[0];
+        return typeof first === "string" ? first : first?.url || null;
+      }
+      if (typeof b.images === "string" && b.images) return b.images;
+      if (typeof b.image === "string" && b.image) return b.image;
+      if (b.thumbnail) return b.thumbnail;
+    }
+
+    // Lookup bundle from bundlesById
+    const bundleId = item.bundle?._id || (typeof item.bundle === "string" ? item.bundle : null) || item.bundleId;
+    if (bundleId && bundlesById[bundleId]) {
+      const b = bundlesById[bundleId];
+      if (b.banner_image) return b.banner_image;
+      if (Array.isArray(b.images) && b.images.length > 0) {
+        const first = b.images[0];
+        return typeof first === "string" ? first : first?.url || null;
+      }
+      if (typeof b.images === "string" && b.images) return b.images;
+      if (b.image) return b.image;
+    }
+
+    return null;
+  };
 
   // Returns the allowed quantities for a product ([1, ...tier quantities]) or null if unrestricted.
   const getAllowedQuantities = (productId) => {
@@ -476,20 +555,69 @@ const OrderDetails = () => {
     });
   };
 
+  // Calculate original items total (before product discounts)
+  const calculateOriginalItemsTotal = () => {
+    if (!hasChanges && order?.totalAmount !== undefined && order?.totalAmount !== null) {
+      return Number(order.totalAmount);
+    }
+    return orderItems
+      .filter(item => item.quantity > 0)
+      .reduce((total, item) => {
+        const isProduct = item.type === "product" || item.product;
+        const isBundle = item.type === "bundle" || item.bundle;
+        const targetProduct = isProduct ? (item.product || productsById[item.product?._id || item.productId]) : null;
+        const targetBundle = isBundle ? (item.bundle || bundlesById[item.bundle?._id || item.bundleId]) : null;
+
+        const originalPrice = isProduct 
+          ? (targetProduct?.price ?? item.price ?? (item.total_amount && item.quantity ? item.total_amount / item.quantity : 0))
+          : (targetBundle?.price ?? item.price ?? (item.total_amount && item.quantity ? item.total_amount / item.quantity : 0));
+
+        return total + (Number(originalPrice) || 0) * (item.quantity || 0);
+      }, 0);
+  };
+
+  // Calculate discounted items total (after product discounts, before coupon and shipping)
+  const calculateDiscountedItemsTotal = () => {
+    if (!hasChanges && order?.discountedTotalAmount !== undefined && order?.discountedTotalAmount !== null) {
+      return Number(order.discountedTotalAmount);
+    }
+    return orderItems
+      .filter(item => item.quantity > 0)
+      .reduce((total, item) => {
+        const isProduct = item.type === "product" || item.product;
+        const isBundle = item.type === "bundle" || item.bundle;
+        const targetProduct = isProduct ? (item.product || productsById[item.product?._id || item.productId]) : null;
+        const targetBundle = isBundle ? (item.bundle || bundlesById[item.bundle?._id || item.bundleId]) : null;
+
+        const originalPrice = isProduct 
+          ? (targetProduct?.price ?? item.price ?? (item.total_amount && item.quantity ? item.total_amount / item.quantity : 0))
+          : (targetBundle?.price ?? item.price ?? (item.total_amount && item.quantity ? item.total_amount / item.quantity : 0));
+
+        const discountedPrice = isProduct 
+          ? (targetProduct?.discounted_price ?? item.discounted_price ?? (item.discounted_total_amount && item.quantity ? item.discounted_total_amount / item.quantity : null))
+          : (targetBundle?.discounted_price ?? item.discounted_price ?? (item.discounted_total_amount && item.quantity ? item.discounted_total_amount / item.quantity : null));
+
+        const hasDiscount = discountedPrice !== null && discountedPrice !== undefined && Number(discountedPrice) > 0 && Number(discountedPrice) < Number(originalPrice);
+        const price = hasDiscount ? Number(discountedPrice) : Number(originalPrice || 0);
+
+        return total + price * (item.quantity || 0);
+      }, 0);
+  };
+
+  const originalItemsTotal = calculateOriginalItemsTotal();
+  const discountedItemsTotal = calculateDiscountedItemsTotal();
+  const productDiscount = Math.max(0, originalItemsTotal - discountedItemsTotal);
+  const couponDiscount = Number(order?.couponDiscountAmount || 0);
+
   // Calculate totals
   const calculateTotal = () => {
-    const itemsTotal = orderItems
-      .filter(item => item.quantity > 0) // Only include items with quantity > 0
-      .reduce((total, item) => {
-        // Use discounted_total_amount if available, otherwise calculate from product/bundle price and quantity
-        const itemTotal = item.discounted_total_amount || 
-                         ((item.product?.discounted_price || item.product?.price || 
-                           item.bundle?.discounted_price || item.bundle?.price || 0) * (item.quantity || 0));
-        return total + itemTotal;
-      }, 0);
-    
-    return itemsTotal + shippingCost;
+    if (!hasChanges && !shippingCostChanged && order?.finalTotalAmount !== undefined && order?.finalTotalAmount !== null) {
+      return Number(order.finalTotalAmount);
+    }
+    return Math.max(0, discountedItemsTotal - couponDiscount) + (shippingCost || 0);
   };
+
+  const finalTotal = calculateTotal();
 
   if (isLoadingOrder) {
     return (
@@ -543,6 +671,7 @@ const OrderDetails = () => {
           <CardContent className="space-y-4">
             {[1, 2, 3].map((i) => (
               <div key={i} className="flex items-center gap-4 p-4 border rounded-lg">
+                <Skeleton className="h-16 w-16 rounded-lg shrink-0" />
                 <div className="flex-1 space-y-2">
                   <Skeleton className="h-5 w-40" />
                   <Skeleton className="h-4 w-24" />
@@ -986,36 +1115,53 @@ const OrderDetails = () => {
                           className="w-full"
                         />
                       </div>
-                      <div className="max-h-40 overflow-y-auto border rounded-md p-2 space-y-2">
+                      <div className="max-h-48 overflow-y-auto border rounded-md p-2 space-y-2">
                         {filteredProducts.length > 0 ? (
-                          filteredProducts.map((product) => (
-                            <div key={product._id} className="flex items-center space-x-2">
-                              <Checkbox
-                                id={`product-${product._id}`}
-                                checked={selectedProducts.includes(product._id)}
-                                onCheckedChange={(checked) => {
-                                  if (checked) {
-                                    setSelectedProducts(prev => [...prev, product._id]);
-                                  } else {
-                                    setSelectedProducts(prev => prev.filter(id => id !== product._id));
-                                  }
-                                }}
-                              />
-                              <label
-                                htmlFor={`product-${product._id}`}
-                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-1"
-                              >
-                                {product.name} - ₹{product.discounted_price || product.price}
-                                {product.sku && <span className="text-muted-foreground ml-2">({product.sku})</span>}
-                                {Array.isArray(product.price_tiers) && product.price_tiers.length > 0 && (
-                                  <Badge variant="secondary" className="ml-2 gap-1 align-middle">
-                                    <Layers className="h-3 w-3" />
-                                    Bulk pricing
-                                  </Badge>
-                                )}
-                              </label>
-                            </div>
-                          ))
+                          filteredProducts.map((product) => {
+                            const prodImg = product.banner_image || (Array.isArray(product.images) ? product.images[0] : null);
+                            return (
+                              <div key={product._id} className="flex items-center space-x-2.5 p-1.5 rounded-md hover:bg-muted/50 transition-colors">
+                                <Checkbox
+                                  id={`product-${product._id}`}
+                                  checked={selectedProducts.includes(product._id)}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setSelectedProducts(prev => [...prev, product._id]);
+                                    } else {
+                                      setSelectedProducts(prev => prev.filter(id => id !== product._id));
+                                    }
+                                  }}
+                                />
+                                <div className="h-10 w-10 shrink-0 rounded border bg-muted/40 overflow-hidden flex items-center justify-center">
+                                  {prodImg ? (
+                                    <img src={prodImg} alt={product.name} className="h-full w-full object-cover" />
+                                  ) : (
+                                    <Package className="h-4 w-4 text-muted-foreground" />
+                                  )}
+                                </div>
+                                <label
+                                  htmlFor={`product-${product._id}`}
+                                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-1 cursor-pointer"
+                                >
+                                  <span>{product.name}</span>
+                                  <span className="text-muted-foreground ml-2 font-normal">
+                                    Price: ₹{product.price}
+                                  </span>
+                                  {product.discounted_price && product.discounted_price !== product.price && (
+                                    <span className="text-[var(--color-success)] ml-1.5 font-medium">
+                                      (Discounted: ₹{product.discounted_price})
+                                    </span>
+                                  )}
+                                  {Array.isArray(product.price_tiers) && product.price_tiers.length > 0 && (
+                                    <Badge variant="secondary" className="ml-2 gap-1 align-middle">
+                                      <Layers className="h-3 w-3" />
+                                      Bulk pricing
+                                    </Badge>
+                                  )}
+                                </label>
+                              </div>
+                            );
+                          })
                         ) : (
                           <Typography variant="small" className="text-muted-foreground text-center py-4">
                             {productSearchText ? "No products found matching your search" : "No products available"}
@@ -1035,34 +1181,52 @@ const OrderDetails = () => {
                           className="w-full"
                         />
                       </div>
-                      <div className="max-h-40 overflow-y-auto border rounded-md p-2 space-y-2">
+                      <div className="max-h-48 overflow-y-auto border rounded-md p-2 space-y-2">
                         {filteredBundles.length > 0 ? (
-                          filteredBundles.map((bundle) => (
-                            <div key={bundle._id} className="flex items-center space-x-2">
-                              <Checkbox
-                                id={`bundle-${bundle._id}`}
-                                checked={selectedBundles.includes(bundle._id)}
-                                onCheckedChange={(checked) => {
-                                  if (checked) {
-                                    setSelectedBundles(prev => [...prev, bundle._id]);
-                                  } else {
-                                    setSelectedBundles(prev => prev.filter(id => id !== bundle._id));
-                                  }
-                                }}
-                              />
-                              <label
-                                htmlFor={`bundle-${bundle._id}`}
-                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-1"
-                              >
-                                {bundle.name} - ₹{bundle.discounted_price || bundle.price}
-                                {bundle.populatedProducts && bundle.populatedProducts.length > 0 && (
-                                  <span className="text-muted-foreground ml-2">
-                                    ({bundle.populatedProducts.length} product{bundle.populatedProducts.length !== 1 ? 's' : ''})
+                          filteredBundles.map((bundle) => {
+                            const bundleImg = bundle.banner_image || (Array.isArray(bundle.images) ? bundle.images[0] : null);
+                            return (
+                              <div key={bundle._id} className="flex items-center space-x-2.5 p-1.5 rounded-md hover:bg-muted/50 transition-colors">
+                                <Checkbox
+                                  id={`bundle-${bundle._id}`}
+                                  checked={selectedBundles.includes(bundle._id)}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setSelectedBundles(prev => [...prev, bundle._id]);
+                                    } else {
+                                      setSelectedBundles(prev => prev.filter(id => id !== bundle._id));
+                                    }
+                                  }}
+                                />
+                                <div className="h-10 w-10 shrink-0 rounded border bg-muted/40 overflow-hidden flex items-center justify-center">
+                                  {bundleImg ? (
+                                    <img src={bundleImg} alt={bundle.name} className="h-full w-full object-cover" />
+                                  ) : (
+                                    <Layers className="h-4 w-4 text-muted-foreground" />
+                                  )}
+                                </div>
+                                <label
+                                  htmlFor={`bundle-${bundle._id}`}
+                                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-1 cursor-pointer"
+                                >
+                                  <span>{bundle.name}</span>
+                                  <span className="text-muted-foreground ml-2 font-normal">
+                                    Price: ₹{bundle.price}
                                   </span>
-                                )}
-                              </label>
-                            </div>
-                          ))
+                                  {bundle.discounted_price && bundle.discounted_price !== bundle.price && (
+                                    <span className="text-[var(--color-success)] ml-1.5 font-medium">
+                                      (Discounted: ₹{bundle.discounted_price})
+                                    </span>
+                                  )}
+                                  {bundle.populatedProducts && bundle.populatedProducts.length > 0 && (
+                                    <span className="text-muted-foreground ml-2">
+                                      ({bundle.populatedProducts.length} product{bundle.populatedProducts.length !== 1 ? 's' : ''})
+                                    </span>
+                                  )}
+                                </label>
+                              </div>
+                            );
+                          })
                         ) : (
                           <Typography variant="small" className="text-muted-foreground text-center py-4">
                             {bundleSearchText ? "No bundles found matching your search" : "No bundles available"}
@@ -1078,10 +1242,20 @@ const OrderDetails = () => {
                         <div className="space-y-2">
                           {selectedProducts.map(productId => {
                             const product = productsResponse?.data?.find(p => p._id === productId);
+                            const prodImg = product?.banner_image || (Array.isArray(product?.images) ? product.images[0] : null);
                             const allowedQuantities = getAllowedQuantities(productId);
                             return (
-                              <div key={productId} className="flex items-center justify-between gap-2">
-                                <Typography variant="small">{product?.name}</Typography>
+                              <div key={productId} className="flex items-center justify-between gap-2 p-1.5 rounded border bg-muted/20">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className="h-8 w-8 shrink-0 rounded border bg-muted overflow-hidden flex items-center justify-center">
+                                    {prodImg ? (
+                                      <img src={prodImg} alt={product?.name} className="h-full w-full object-cover" />
+                                    ) : (
+                                      <Package className="h-3.5 w-3.5 text-muted-foreground" />
+                                    )}
+                                  </div>
+                                  <Typography variant="small" className="truncate font-medium">{product?.name}</Typography>
+                                </div>
                                 {allowedQuantities ? (
                                   <Select
                                     value={String(newItemQuantities[productId] || 1)}
@@ -1090,7 +1264,7 @@ const OrderDetails = () => {
                                       [productId]: parseInt(val, 10)
                                     }))}
                                   >
-                                    <SelectTrigger className="w-20">
+                                    <SelectTrigger className="w-20 shrink-0">
                                       <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -1110,7 +1284,7 @@ const OrderDetails = () => {
                                       ...prev,
                                       [productId]: parseInt(e.target.value) || 1
                                     }))}
-                                    className="w-20"
+                                    className="w-20 shrink-0"
                                   />
                                 )}
                               </div>
@@ -1118,9 +1292,19 @@ const OrderDetails = () => {
                           })}
                           {selectedBundles.map(bundleId => {
                             const bundle = bundlesResponse?.data?.data?.find(b => b._id === bundleId);
+                            const bundleImg = bundle?.banner_image || (Array.isArray(bundle?.images) ? bundle.images[0] : null);
                             return (
-                              <div key={bundleId} className="flex items-center justify-between">
-                                <Typography variant="small">{bundle?.name}</Typography>
+                              <div key={bundleId} className="flex items-center justify-between gap-2 p-1.5 rounded border bg-muted/20">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className="h-8 w-8 shrink-0 rounded border bg-muted overflow-hidden flex items-center justify-center">
+                                    {bundleImg ? (
+                                      <img src={bundleImg} alt={bundle?.name} className="h-full w-full object-cover" />
+                                    ) : (
+                                      <Layers className="h-3.5 w-3.5 text-muted-foreground" />
+                                    )}
+                                  </div>
+                                  <Typography variant="small" className="truncate font-medium">{bundle?.name}</Typography>
+                                </div>
                                 <Input
                                   type="number"
                                   min="1"
@@ -1129,7 +1313,7 @@ const OrderDetails = () => {
                                     ...prev,
                                     [bundleId]: parseInt(e.target.value) || 1
                                   }))}
-                                  className="w-20"
+                                  className="w-20 shrink-0"
                                 />
                               </div>
                             );
@@ -1170,15 +1354,60 @@ const OrderDetails = () => {
                   const itemName = isProduct ? (item.product?.name || 'Unknown Product') : 
                                  isBundle ? (item.bundle?.name || 'Unknown Bundle') : 'Unknown Item';
                   
-                  const itemPrice = isProduct ? (item.product?.discounted_price || item.product?.price || 0) :
-                                 isBundle ? (item.bundle?.discounted_price || item.bundle?.price || 0) : 0;
+                  const targetProduct = isProduct ? (item.product || productsById[item.product?._id || item.productId]) : null;
+                  const targetBundle = isBundle ? (item.bundle || bundlesById[item.bundle?._id || item.bundleId]) : null;
+
+                  const originalPrice = isProduct 
+                    ? (targetProduct?.price ?? item.price ?? (item.total_amount && item.quantity ? item.total_amount / item.quantity : 0))
+                    : (targetBundle?.price ?? item.price ?? (item.total_amount && item.quantity ? item.total_amount / item.quantity : 0));
+
+                  const discountedPrice = isProduct 
+                    ? (targetProduct?.discounted_price ?? item.discounted_price ?? (item.discounted_total_amount && item.quantity ? item.discounted_total_amount / item.quantity : null))
+                    : (targetBundle?.discounted_price ?? item.discounted_price ?? (item.discounted_total_amount && item.quantity ? item.discounted_total_amount / item.quantity : null));
+
+                  const hasDiscount = discountedPrice !== null && discountedPrice !== undefined && Number(discountedPrice) > 0 && Number(discountedPrice) < Number(originalPrice);
+                  const effectivePrice = hasDiscount ? Number(discountedPrice) : Number(originalPrice || 0);
 
                   const allowedQuantities = isProduct ? getAllowedQuantities(item.product?._id) : null;
+                  const itemImage = getItemImage(item);
 
                   return (
-                    <div key={index} className="flex items-center gap-4 p-4 border rounded-lg">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
+                    <div key={index} className="flex items-center gap-4 p-4 border rounded-lg transition-colors hover:bg-muted/20">
+                      {/* Item Image Thumbnail */}
+                      <div
+                        className={cn(
+                          "relative h-16 w-16 shrink-0 rounded-lg border bg-muted/30 overflow-hidden flex items-center justify-center",
+                          itemImage ? "cursor-pointer group" : ""
+                        )}
+                        onClick={() => {
+                          if (itemImage) setPreviewImage(itemImage);
+                        }}
+                        title={itemImage ? "Click to view full image" : undefined}
+                      >
+                        {itemImage ? (
+                          <>
+                            <img
+                              src={itemImage}
+                              alt={itemName}
+                              className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                              <Eye className="h-4 w-4" />
+                            </div>
+                          </>
+                        ) : (
+                          <div className="flex items-center justify-center text-muted-foreground">
+                            {isBundle ? (
+                              <Layers className="h-6 w-6 stroke-1" />
+                            ) : (
+                              <Package className="h-6 w-6 stroke-1" />
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <Typography variant="p" className="font-medium">{itemName}</Typography>
                           <Badge variant={isProduct ? "default" : "secondary"}>
                             {isProduct ? "Product" : "Bundle"}
@@ -1190,9 +1419,33 @@ const OrderDetails = () => {
                             </Badge>
                           )}
                         </div>
-                        <Typography variant="small" className="text-muted-foreground">
-                          {isProduct && item.product?.sku ? `SKU: ${item.product.sku} • ` : ''}₹{itemPrice.toFixed(2)} each
-                        </Typography>
+
+                        {/* Price and Discounted Price Display */}
+                        <div className="flex items-center gap-3 flex-wrap mt-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-muted-foreground font-medium">Price:</span>
+                            <span className={cn("text-sm", hasDiscount ? "line-through text-muted-foreground" : "font-medium text-foreground")}>
+                              ₹{Number(originalPrice || 0).toFixed(2)}
+                            </span>
+                          </div>
+
+                          {discountedPrice !== null && discountedPrice !== undefined && Number(discountedPrice) > 0 && (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs text-muted-foreground font-medium">Discounted Price:</span>
+                              <span className="text-sm font-semibold text-[var(--color-success)]">
+                                ₹{Number(discountedPrice).toFixed(2)}
+                              </span>
+                            </div>
+                          )}
+
+                          <span className="text-xs text-muted-foreground">• each</span>
+
+                          {hasDiscount && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-[var(--color-success)] border-[var(--color-success)]/30 font-medium">
+                              Save ₹{(Number(originalPrice) - Number(discountedPrice)).toFixed(2)}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-2">
@@ -1242,9 +1495,16 @@ const OrderDetails = () => {
                         )}
                       </div>
                       
-                      <Typography variant="p" className="font-medium w-24 text-right">
-                        ₹{(itemPrice * item.quantity).toFixed(2)}
-                      </Typography>
+                      <div className="w-28 text-right flex flex-col items-end shrink-0">
+                        <Typography variant="p" className="font-semibold">
+                          ₹{(effectivePrice * item.quantity).toFixed(2)}
+                        </Typography>
+                        {hasDiscount && (
+                          <Typography variant="small" className="text-muted-foreground line-through text-xs">
+                            ₹{(Number(originalPrice) * item.quantity).toFixed(2)}
+                          </Typography>
+                        )}
+                      </div>
                       
                       <Button
                         variant="ghost"
@@ -1263,24 +1523,41 @@ const OrderDetails = () => {
           {/* Order Total */}
           <div className="mt-6 pt-4 border-t">
             <div className="space-y-3">
-              {/* Items Total */}
+              {/* Items Total (Original Total before discount) */}
               <div className="flex justify-between items-center">
                 <Typography variant="p" className="text-muted-foreground">Items Total:</Typography>
-                <Typography variant="p">₹{(calculateTotal() - shippingCost).toFixed(2)}</Typography>
+                <Typography variant="p" className="font-medium">₹{originalItemsTotal.toFixed(2)}</Typography>
               </div>
+
+              {/* Product Discount */}
+              {productDiscount > 0 && (
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <Typography variant="p" className="text-[var(--color-success)]">
+                      Discount:
+                    </Typography>
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-[var(--color-success)] border-[var(--color-success)]/30 font-medium">
+                      Save ₹{productDiscount.toFixed(2)}
+                    </Badge>
+                  </div>
+                  <Typography variant="p" className="font-medium text-[var(--color-success)]">
+                    −₹{productDiscount.toFixed(2)}
+                  </Typography>
+                </div>
+              )}
 
               {/* Coupon Discount */}
               {order.coupon && (
                 <div className="flex justify-between items-start">
                   <div>
-                    <Typography variant="p" className="text-muted-foreground">
+                    <Typography variant="p" className="text-[var(--color-success)]">
                       Coupon ({order.coupon.code})
                     </Typography>
                     <Typography variant="small" className="text-muted-foreground">
                       {formatCouponDiscount(order.coupon)}
                     </Typography>
                   </div>
-                  <Typography variant="p" className="text-[var(--color-success)]">
+                  <Typography variant="p" className="font-medium text-[var(--color-success)]">
                     −₹{(order.couponDiscountAmount || 0).toFixed(2)}
                   </Typography>
                 </div>
@@ -1302,22 +1579,10 @@ const OrderDetails = () => {
               {/* Final Total */}
               <div className="flex justify-between items-center pt-2 border-t">
                 <Typography variant="h4">Final Total:</Typography>
-                <Typography variant="h4" className="text-[var(--color-success)]">
-                  ₹{(order.finalTotalAmount ?? calculateTotal()).toFixed(2)}
+                <Typography variant="h4" className="text-[var(--color-success)] font-bold">
+                  ₹{finalTotal.toFixed(2)}
                 </Typography>
               </div>
-              
-              {/* Original vs Discounted (if different) */}
-              {(order.totalAmount || 0) !== (order.discountedTotalAmount || 0) && (
-                <div className="flex justify-between items-center mt-2 text-sm">
-                  <Typography variant="small" className="text-muted-foreground">
-                    Original Total: ₹{(order.totalAmount || 0).toFixed(2)}
-                  </Typography>
-                  <Typography variant="small" className="text-[var(--color-success)]">
-                    Discounted Total: ₹{(order.discountedTotalAmount || 0).toFixed(2)}
-                  </Typography>
-                </div>
-              )}
             </div>
           </div>
         </CardContent>
@@ -1350,6 +1615,22 @@ const OrderDetails = () => {
           </div>
         )}
       </div>
+
+      {/* Item Image Fullscreen Preview Dialog */}
+      <Dialog open={!!previewImage} onOpenChange={() => setPreviewImage(null)}>
+        <DialogContent className="max-w-xl p-3">
+          <DialogHeader className="p-2 pb-0">
+            <DialogTitle className="text-sm font-medium text-muted-foreground">Image Preview</DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center justify-center p-2">
+            <img
+              src={previewImage}
+              alt="Item Preview"
+              className="max-h-[75vh] w-auto max-w-full rounded-lg object-contain"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
