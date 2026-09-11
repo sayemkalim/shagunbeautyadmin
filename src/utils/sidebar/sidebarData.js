@@ -28,7 +28,8 @@ import {
   CreditCard,
   Mail,
   Truck,
-  Ticket
+  Ticket,
+  Megaphone
 } from "lucide-react";
 import { getItem } from "../local_storage";
 const userName = getItem("userName") || "Admin";
@@ -131,6 +132,14 @@ export const data = {
       title: "Banners",
       url: "/dashboard/banners",
       icon: Image,
+      isActive: true,
+      items: [],
+      roles: ["super_admin", "admin"],
+    },
+    {
+      title: "Marquee",
+      url: "/dashboard/marquee",
+      icon: Megaphone,
       isActive: true,
       items: [],
       roles: ["super_admin", "admin"],

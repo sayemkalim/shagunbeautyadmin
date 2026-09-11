@@ -38,6 +38,8 @@ import Coupons from "@/pages/coupons";
 import CouponEditor from "@/pages/coupons/components/coupon_editor";
 import Banners from "@/pages/banners";
 import BannerEditor from "@/pages/banners/components/banner_editor";
+import Marquee from "@/pages/marquee";
+import MarqueeEditor from "@/pages/marquee/components/marquee_editor";
 import SuperAdmin from "@/pages/super-admin";
 import AddSuperAdminCard from "@/pages/super-admin/components/AddAdminCard";
 import SuperAdminEditorCard from "@/pages/super-admin/components/super-admin_editor/AdminEditorCard";
@@ -130,6 +132,11 @@ const Router = () => {
           <Route path="/dashboard/banners" element={<Banners />} />
           <Route path="/dashboard/banners/add" element={<BannerEditor />} />
           <Route path="/dashboard/banners/edit/:id" element={<BannerEditor />} />
+
+          {/* Marquee Routes */}
+          <Route path="/dashboard/marquee" element={<Marquee />} />
+          <Route path="/dashboard/marquee/add" element={<MarqueeEditor />} />
+          <Route path="/dashboard/marquee/edit/:id" element={<MarqueeEditor />} />
           {/* Inventory Routes */}
           <Route path="/dashboard/inventory" element={<Inventory />} />
           <Route path="/dashboard/inventory/stock-history" element={<StockHistory />} />

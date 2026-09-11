@@ -45,4 +45,6 @@ export const endpoints = {
   coupon: "api/coupon",
   //banner
   banner: "api/banner",
+  //marquee
+  marquee: "api/marquee",
 };
