@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Package } from "lucide-react";
 import CustomTable from "@/components/custom_table";
 import Typography from "@/components/typography";
 import ActionMenu from "@/components/action_menu";
@@ -83,6 +83,24 @@ const BannersTable = ({ setBannersLength, params, setParams }) => {
     setBannersLength(total || banners?.length || 0);
   }, [total, banners]);
 
+  const getBannerDeleteTitle = (banner) => {
+    if (!banner) return "banner";
+    const products =
+      banner.products && banner.products.length > 0
+        ? banner.products
+        : banner.product
+        ? [banner.product]
+        : [];
+
+    if (products.length === 0) return "banner";
+    if (products.length === 1) return `banner linked to "${products[0]?.name || "product"}"`;
+    return `banner linked to ${products.length} products (${products
+      .slice(0, 3)
+      .map((p) => p?.name)
+      .filter(Boolean)
+      .join(", ")}${products.length > 3 ? "..." : ""})`;
+  };
+
   const columns = [
     {
       key: "banner_url",
@@ -96,29 +114,92 @@ const BannersTable = ({ setBannersLength, params, setParams }) => {
       ),
     },
     {
-      key: "product",
-      label: "Linked Product",
-      render: (product) => (
-        <div className="flex items-center gap-2">
-          {product?.banner_image && (
-            <img
-              src={product.banner_image}
-              alt={product?.name}
-              className="border-input h-8 w-8 shrink-0 rounded-full border object-cover"
-            />
-          )}
-          <div className="flex flex-col">
-            <Typography variant="p" className="font-medium">
-              {product?.name || "—"}
-            </Typography>
-            {product?.sku && (
-              <Typography variant="small" className="text-muted-foreground">
-                {product.sku}
+      key: "products",
+      label: "Linked Products",
+      render: (_, row) => {
+        const products =
+          row?.products && row.products.length > 0
+            ? row.products
+            : row?.product
+            ? [row.product]
+            : [];
+
+        if (products.length === 0) {
+          return <span className="text-muted-foreground text-sm">—</span>;
+        }
+
+        if (products.length === 1) {
+          const product = products[0];
+          return (
+            <div className="flex items-center gap-2">
+              {product?.banner_image && (
+                <img
+                  src={product.banner_image}
+                  alt={product?.name}
+                  className="border-input h-8 w-8 shrink-0 rounded-full border object-cover"
+                />
+              )}
+              <div className="flex flex-col">
+                <Typography variant="p" className="font-medium">
+                  {product?.name || "—"}
+                </Typography>
+                {product?.sku && (
+                  <Typography variant="small" className="text-muted-foreground">
+                    {product.sku}
+                  </Typography>
+                )}
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div className="flex items-center gap-2.5">
+            <div className="flex -space-x-2 shrink-0">
+              {products.slice(0, 3).map((p, idx) =>
+                p?.banner_image ? (
+                  <img
+                    key={p?._id || idx}
+                    src={p.banner_image}
+                    alt={p?.name}
+                    className="border-background h-7 w-7 rounded-full border-2 object-cover"
+                    title={p?.name}
+                  />
+                ) : (
+                  <div
+                    key={p?._id || idx}
+                    className="border-background bg-muted text-muted-foreground flex h-7 w-7 items-center justify-center rounded-full border-2 text-[10px]"
+                    title={p?.name}
+                  >
+                    <Package className="size-3.5" />
+                  </div>
+                )
+              )}
+            </div>
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <div className="flex flex-wrap items-center gap-1">
+                {products.slice(0, 2).map((p, idx) => (
+                  <span
+                    key={p?._id || idx}
+                    className="bg-secondary text-secondary-foreground inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium truncate max-w-[120px]"
+                    title={p?.name}
+                  >
+                    {p?.name || "Product"}
+                  </span>
+                ))}
+                {products.length > 2 && (
+                  <span className="bg-muted text-muted-foreground inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium">
+                    +{products.length - 2}
+                  </span>
+                )}
+              </div>
+              <Typography variant="small" className="text-muted-foreground text-[11px]">
+                {products.length} products linked
               </Typography>
-            )}
+            </div>
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       key: "order",
@@ -180,7 +261,7 @@ const BannersTable = ({ setBannersLength, params, setParams }) => {
       <CustomDialog
         onOpen={openDelete}
         onClose={handleCloseDialog}
-        title={`banner linked to "${selectedBanner?.product?.name}"`}
+        title={getBannerDeleteTitle(selectedBanner)}
         modalType="Delete"
         onDelete={handleDeleteBanner}
         id={selectedBanner?._id}
