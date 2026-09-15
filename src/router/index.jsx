@@ -38,6 +38,8 @@ import Coupons from "@/pages/coupons";
 import CouponEditor from "@/pages/coupons/components/coupon_editor";
 import Banners from "@/pages/banners";
 import BannerEditor from "@/pages/banners/components/banner_editor";
+import SecondBanner from "@/pages/second_banner";
+import CardBanner from "@/pages/card_banner";
 import Marquee from "@/pages/marquee";
 import MarqueeEditor from "@/pages/marquee/components/marquee_editor";
 import SuperAdmin from "@/pages/super-admin";
@@ -132,6 +134,14 @@ const Router = () => {
           <Route path="/dashboard/banners" element={<Banners />} />
           <Route path="/dashboard/banners/add" element={<BannerEditor />} />
           <Route path="/dashboard/banners/edit/:id" element={<BannerEditor />} />
+
+          {/* Top Single Banner Routes */}
+          <Route path="/dashboard/top-single-banner" element={<SecondBanner />} />
+          <Route path="/dashboard/second-banner" element={<Navigate to="/dashboard/top-single-banner" replace />} />
+
+          {/* Card Banners Routes */}
+          <Route path="/dashboard/card-banners" element={<CardBanner />} />
+          <Route path="/dashboard/card-banner" element={<Navigate to="/dashboard/card-banners" replace />} />
 
           {/* Marquee Routes */}
           <Route path="/dashboard/marquee" element={<Marquee />} />

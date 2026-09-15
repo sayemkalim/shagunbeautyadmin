@@ -8,9 +8,6 @@ export const updateProduct = async ({ id, payload }) => {
       endpoint: `${endpoints.product}/${id}`,
       method: "PUT",
       data: payload,
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
     });
 
     return response;

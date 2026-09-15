@@ -482,11 +482,22 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
 
 
   const removeImage = (index) => {
-    setFormData((prev) => ({
-      ...prev,
-      images: prev.images.filter((_, i) => i !== index),
-      imagePreviews: prev.imagePreviews.filter((_, i) => i !== index),
-    }));
+    setFormData((prev) => {
+      const targetPreview = prev.imagePreviews[index];
+      if (targetPreview && !targetPreview.isFromServer && targetPreview.preview) {
+        URL.revokeObjectURL(targetPreview.preview);
+      }
+      const newPreviews = prev.imagePreviews.filter((_, i) => i !== index);
+      let newImages = prev.images;
+      if (targetPreview?.file) {
+        newImages = prev.images.filter((f) => f !== targetPreview.file);
+      }
+      return {
+        ...prev,
+        images: newImages,
+        imagePreviews: newPreviews,
+      };
+    });
   };
 
   
@@ -546,17 +557,34 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
     formData.tags.forEach((tag) => form.append("tags", tag));
   
     // Product images
+    if (isEditMode) {
+      const existingUrls = formData.imagePreviews
+        .filter((img) => img.isFromServer && img.preview && typeof img.preview === "string" && img.preview.startsWith("http"))
+        .map((img) => img.preview);
+
+      existingUrls.forEach((url) => form.append("images", url));
+
+      if (formData.imagePreviews.length === 0) {
+        form.append("images", "");
+      }
+    }
+
+    // New product image files
     formData.images.forEach((image) => {
       if (image instanceof File) {
         form.append("images", image);
       }
     });
-  
+
     // Banner image
     if (formData.bannerImage instanceof File) {
       form.append("banner_image", formData.bannerImage);
+    } else if (formData.bannerPreview && typeof formData.bannerPreview === "string" && formData.bannerPreview.startsWith("http")) {
+      form.append("banner_image", formData.bannerPreview);
+    } else if (isEditMode) {
+      form.append("banner_image", "");
     }
-  
+
     // ✅ Variants - only send if there are meaningful variants
     const validVariants = formData.variants.filter(variant => 
       variant.sku.trim() || variant.name.trim() || variant.price || variant.discounted_price || variant.inventory || (variant.images && variant.images.length > 0)
@@ -577,7 +605,16 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
         form.append(`variants[${i}][expiry_date]`, variant.expiry_date);
       }
 
-      // Append images for this variant
+      // Append existing variant image URLs
+      if (isEditMode && variant.imagePreviews && variant.imagePreviews.length > 0) {
+        variant.imagePreviews.forEach((img) => {
+          if (img.isFromServer && img.preview && typeof img.preview === "string" && img.preview.startsWith("http")) {
+            form.append(`variants[${i}][images]`, img.preview);
+          }
+        });
+      }
+
+      // Append new image files for this variant
       if (variant.images && variant.images.length > 0) {
         variant.images.forEach((imageFile) => {
           if (imageFile instanceof File) {

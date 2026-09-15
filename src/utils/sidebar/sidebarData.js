@@ -137,6 +137,22 @@ export const data = {
       roles: ["super_admin", "admin"],
     },
     {
+      title: "Top Single Banner",
+      url: "/dashboard/top-single-banner",
+      icon: GalleryThumbnails,
+      isActive: true,
+      items: [],
+      roles: ["super_admin", "admin"],
+    },
+    {
+      title: "Card Banners",
+      url: "/dashboard/card-banners",
+      icon: CreditCard,
+      isActive: true,
+      items: [],
+      roles: ["super_admin", "admin"],
+    },
+    {
       title: "Marquee",
       url: "/dashboard/marquee",
       icon: Megaphone,

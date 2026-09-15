@@ -136,6 +136,10 @@ const AddBrandCard = ({ initialData = {}, isEditMode = false }) => {
 
     if (formData.image) {
       form.append("images", formData.image);
+    } else if (formData.imagePreview) {
+      form.append("images", formData.imagePreview);
+    } else if (isEditMode) {
+      form.append("images", "");
     }
 
     mutation.mutate(form);
