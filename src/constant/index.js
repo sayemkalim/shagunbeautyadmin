@@ -20,8 +20,21 @@ export const columnMapper = {
 export const ORDER_STATUSES = [
   { value: "all", label: "All Status" },
   { value: "pending", label: "Pending" },
-  { value: "processing", label: "Processing" },
+  { value: "confirmed", label: "Confirmed" },
   { value: "shipped", label: "Shipped" },
+  { value: "out_for_delivery", label: "Out for Delivery" },
   { value: "delivered", label: "Delivered" },
-  { value: "cancelled", label: "Cancelled" }
+  { value: "cancelled", label: "Cancelled" },
+  { value: "refunded", label: "Refunded" },
 ];
+
+export const ORDER_STATUS_VALUES = [
+  "pending",
+  "confirmed",
+  "shipped",
+  "out_for_delivery",
+  "delivered",
+  "cancelled",
+  "refunded",
+];
+

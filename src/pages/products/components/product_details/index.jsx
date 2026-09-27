@@ -255,11 +255,19 @@ const ProductDetails = () => {
         >
           <div className="flex justify-between items-center mb-2">
             <h4 className="font-medium">{variant.name}</h4>
-            <Badge variant={variant.inventory > 0 ? "default" : "destructive"}>
-  {variant.inventory > 0
-    ? `In Stock (${variant.inventory})`
-    : "Out of Stock"}
-</Badge>
+            <Badge
+              variant={
+                Number(variant.inventory) > 0 || variant.inventory === true
+                  ? "default"
+                  : "destructive"
+              }
+            >
+              {Number(variant.inventory) > 0 || variant.inventory === true
+                ? Number(variant.inventory) > 1
+                  ? `In Stock (${variant.inventory})`
+                  : "In Stock"
+                : "Out of Stock"}
+            </Badge>
           </div>
 
           <p className="text-sm text-muted-foreground mb-1">SKU: {variant.sku}</p>

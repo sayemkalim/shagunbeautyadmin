@@ -17,8 +17,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fetchOrdersByProduct } from "../helpers/fetchOrdersByProduct";
-import { getStatusBadgeClass } from "../helpers/statusBadge";
+import { getStatusBadgeClass, formatOrderStatus } from "../helpers/statusBadge";
 import { cn } from "@/lib/utils";
+
 
 const SKUTable = ({ productsWithOrders = [], isLoading = false }) => {
   const navigate = useNavigate();
@@ -495,10 +496,11 @@ const SKUTable = ({ productsWithOrders = [], isLoading = false }) => {
                                 )}
                               </Typography>
                             </div>
-                            <Badge className={cn("capitalize", getStatusBadgeClass(order.status))}>
-                              {order.status}
+                            <Badge className={cn("font-medium", getStatusBadgeClass(order.status))}>
+                              {formatOrderStatus(order.status)}
                             </Badge>
                           </div>
+
 
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>

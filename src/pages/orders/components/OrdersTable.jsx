@@ -24,21 +24,19 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Banknote, QrCode } from "lucide-react";
 import { fetchOrders } from "../helpers/fetchOrders";
 import { updateOrderStatus } from "../helpers/updateOrderStatus";
 import { bulkUpdateOrderStatus } from "../helpers/bulkUpdateOrderStatus";
 import { fetchOrderBill } from "../helpers/fetchOrderBill";
 import { triggerBillDownload } from "../helpers/triggerBillDownload";
-import { getStatusBadgeClass } from "../helpers/statusBadge";
+import { getStatusBadgeClass, formatOrderStatus } from "../helpers/statusBadge";
+import { isOrderCOD } from "../helpers/isOrderCOD";
+import { ORDER_STATUS_VALUES } from "@/constant";
 import { cn } from "@/lib/utils";
 
-const ORDER_STATUSES = [
-  "pending",
-  "processing",
-  "shipped",
-  "delivered",
-  "cancelled",
-];
+const ORDER_STATUSES = ORDER_STATUS_VALUES;
+
 
 const OrdersTable = ({
   setOrdersLength,
@@ -69,6 +67,7 @@ const OrdersTable = ({
   const [openStatusDialog, setOpenStatusDialog] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [newStatus, setNewStatus] = useState("");
+  const [codPaymentMethod, setCodPaymentMethod] = useState("");
   const [selectedRowIds, setSelectedRowIds] = useState([]);
   const [openBulkStatusDialog, setOpenBulkStatusDialog] = useState(false);
   const [bulkStatus, setBulkStatus] = useState("");
@@ -77,18 +76,23 @@ const OrdersTable = ({
 
   const { mutate: updateOrderStatusMutation, isLoading: isUpdating } =
     useMutation({
-      mutationFn: ({ orderId, status }) => {
-        return updateOrderStatus({ orderId, status });
+      mutationFn: ({ orderId, status, codPaymentMethod }) => {
+        return updateOrderStatus({ orderId, status, codPaymentMethod });
       },
-      onSuccess: () => {
+      onSuccess: (res) => {
+        if (res?.error || res?.response?.success === false) {
+          toast.error(res?.response?.data?.message || "Failed to update order status.");
+          return;
+        }
         toast.success("Order status updated successfully.");
         queryClient.invalidateQueries(["orders"]);
         setOpenStatusDialog(false);
       },
-      onError: () => {
-        toast.error("Failed to update order status.");
+      onError: (err) => {
+        toast.error(err?.response?.data?.message || "Failed to update order status.");
       },
     });
+
 
   const { mutate: bulkUpdateOrderStatusMutation, isLoading: isBulkUpdating } =
     useMutation({
@@ -240,7 +244,8 @@ const OrdersTable = ({
 
   const onOpenStatusDialog = (order) => {
     setSelectedOrder(order);
-    setNewStatus(order.status);
+    setNewStatus(order?.status || "");
+    setCodPaymentMethod(order?.codPaymentMethod || "");
     setOpenStatusDialog(true);
   };
 
@@ -384,16 +389,22 @@ const OrdersTable = ({
       label: "Status",
       render: (status, row) => (
         <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <Badge
-              className={cn("w-fit cursor-pointer capitalize", getStatusBadgeClass(status))}
+              className={cn("w-fit cursor-pointer font-medium", getStatusBadgeClass(status))}
               onClick={() => onOpenStatusDialog(row)}
+              title="Click to update status"
             >
-              {status}
+              {formatOrderStatus(status)}
             </Badge>
             {row?.paymentMode && (
-              <Badge variant="outline" className="w-fit">
+              <Badge variant="outline" className="w-fit text-[11px] font-mono uppercase">
                 {row.paymentMode}
+              </Badge>
+            )}
+            {row?.codPaymentMethod && (
+              <Badge variant="secondary" className="w-fit text-[10px] px-1.5 py-0 font-medium">
+                {row.codPaymentMethod === "cash" ? "💵 Cash" : row.codPaymentMethod === "upi" ? "📱 UPI" : row.codPaymentMethod}
               </Badge>
             )}
           </div>
@@ -525,8 +536,9 @@ const OrdersTable = ({
                         o.orderNumber ? `#${o.orderNumber}` : o._id,
                         `"${o.address?.name || o.user?.name || o.customer?.name || "Unknown"}"`,
                         `"${o.address?.mobile || o.guestInfo?.mobile || ""}"`,
-                        o.status,
+                        formatOrderStatus(o.status),
                         o.finalTotalAmount || 0,
+
                         o.createdAt
                           ? format(new Date(o.createdAt), "dd/MM/yyyy")
                           : "",
@@ -571,34 +583,141 @@ const OrdersTable = ({
 
       {/* Single Order Status Update Dialog */}
       <Dialog open={openStatusDialog} onOpenChange={setOpenStatusDialog}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Update Order Status</DialogTitle>
           </DialogHeader>
-          <Typography variant="p" className="font-medium">
-            Order ID: {selectedOrder?._id}
-          </Typography>
-          <Select value={newStatus} onValueChange={setNewStatus}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select Status" />
-            </SelectTrigger>
-            <SelectContent>
-              {ORDER_STATUSES.map((status) => (
-                <SelectItem key={status} value={status}>
-                  {status.toUpperCase()}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <DialogFooter>
+
+          <div className="space-y-4 py-1">
+            <div className="flex items-center justify-between text-xs bg-muted/40 p-2.5 rounded-lg border">
+              <div>
+                <span className="text-muted-foreground block text-[11px]">Order</span>
+                <span className="font-mono font-semibold text-sm">
+                  {selectedOrder?.orderNumber ? `#${selectedOrder.orderNumber}` : `#${selectedOrder?._id?.slice(-6).toUpperCase()}`}
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-muted-foreground block text-[11px]">Payment Mode</span>
+                <Badge variant="outline" className="font-mono text-xs uppercase">
+                  {selectedOrder?.paymentMode || "COD"}
+                </Badge>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">
+                Select New Status
+              </label>
+              <Select value={newStatus} onValueChange={setNewStatus}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ORDER_STATUSES.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {formatOrderStatus(status)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* COD Payment Collection Selector (Required when marking COD orders as Delivered) */}
+            {isOrderCOD(selectedOrder) && newStatus === "delivered" && (
+              <div className="space-y-2.5 pt-3 border-t">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
+                    <Banknote className="h-4 w-4 text-emerald-600" />
+                    <span>COD Payment Collection</span>
+                    <span className="text-destructive">*</span>
+                  </label>
+                  <Badge variant="outline" className="text-[10px] uppercase font-mono text-amber-600 border-amber-300 dark:border-amber-700">
+                    COD Delivery
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Select how the delivery agent collected payment from the customer:
+                </p>
+
+                <div className="grid grid-cols-2 gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setCodPaymentMethod("cash")}
+                    className={cn(
+                      "flex flex-col items-center justify-center gap-1.5 p-3 rounded-lg border text-xs font-medium transition-all cursor-pointer relative",
+                      codPaymentMethod === "cash"
+                        ? "border-emerald-600 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-500 ring-2 ring-emerald-500/30 font-semibold shadow-xs"
+                        : "border-border hover:bg-muted/60 text-muted-foreground"
+                    )}
+                  >
+                    <Banknote className={cn("h-5 w-5", codPaymentMethod === "cash" ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")} />
+                    <span>Paid by Cash</span>
+                    <span className="text-[10px] font-normal text-muted-foreground">Cash on Hand</span>
+                    {codPaymentMethod === "cash" && (
+                      <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 text-white text-[10px]">
+                        ✓
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCodPaymentMethod("upi")}
+                    className={cn(
+                      "flex flex-col items-center justify-center gap-1.5 p-3 rounded-lg border text-xs font-medium transition-all cursor-pointer relative",
+                      codPaymentMethod === "upi"
+                        ? "border-blue-600 bg-blue-50 text-blue-900 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-500 ring-2 ring-blue-500/30 font-semibold shadow-xs"
+                        : "border-border hover:bg-muted/60 text-muted-foreground"
+                    )}
+                  >
+                    <QrCode className={cn("h-5 w-5", codPaymentMethod === "upi" ? "text-blue-600 dark:text-blue-400" : "text-muted-foreground")} />
+                    <span>Paid by UPI</span>
+                    <span className="text-[10px] font-normal text-muted-foreground">QR / Online Scan</span>
+                    {codPaymentMethod === "upi" && (
+                      <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-white text-[10px]">
+                        ✓
+                      </span>
+                    )}
+                  </button>
+                </div>
+
+                {!codPaymentMethod && (
+                  <p className="text-[11px] text-destructive font-medium">
+                    * Please choose Paid by Cash or Paid by UPI before marking as Delivered.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button
-              onClick={() =>
+              variant="outline"
+              onClick={() => setOpenStatusDialog(false)}
+              disabled={isUpdating}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (isOrderCOD(selectedOrder) && newStatus === "delivered" && !codPaymentMethod) {
+                  toast.error("Please select a COD payment collection method (Paid by Cash or Paid by UPI).");
+                  return;
+                }
                 updateOrderStatusMutation({
                   orderId: selectedOrder?._id,
                   status: newStatus,
-                })
+                  codPaymentMethod:
+                    isOrderCOD(selectedOrder) && newStatus === "delivered"
+                      ? codPaymentMethod
+                      : undefined,
+                });
+              }}
+              disabled={
+                isUpdating ||
+                !newStatus ||
+                (isOrderCOD(selectedOrder) && newStatus === "delivered" && !codPaymentMethod)
               }
-              disabled={isUpdating}
             >
               {isUpdating ? "Updating..." : "Update Status"}
             </Button>
@@ -625,7 +744,7 @@ const OrdersTable = ({
             <SelectContent>
               {ORDER_STATUSES.map((status) => (
                 <SelectItem key={status} value={status}>
-                  {status.toUpperCase()}
+                  {formatOrderStatus(status)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -646,6 +765,7 @@ const OrdersTable = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
     </>
   );
 };

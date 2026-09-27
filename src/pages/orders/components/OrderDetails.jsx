@@ -24,6 +24,8 @@ import {
   User,
   Phone,
   ExternalLink,
+  Banknote,
+  QrCode,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -33,7 +35,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -41,14 +43,18 @@ import Typography from "@/components/typography";
 
 import { fetchOrderById } from "../helpers/fetchOrderById";
 import { updateOrder } from "../helpers/updateOrder";
+import { updateOrderStatus } from "../helpers/updateOrderStatus";
 import { generatePaymentLink } from "../helpers/generatePaymentLink";
 import { fetchOrderBill } from "../helpers/fetchOrderBill";
 import { triggerBillDownload } from "../helpers/triggerBillDownload";
 import { fetchUserById } from "@/pages/users/helpers/fetchUserById";
 import { fetchProducts } from "@/pages/products/components/helpers/fetchProducts";
 import { fetchBundle } from "@/pages/bundles/helpers/fetchBundle";
-import { getStatusBadgeClass } from "../helpers/statusBadge";
+import { getStatusBadgeClass, formatOrderStatus } from "../helpers/statusBadge";
+import { isOrderCOD } from "../helpers/isOrderCOD";
+import { ORDER_STATUS_VALUES } from "@/constant";
 import { cn } from "@/lib/utils";
+
 
 // Mirrors the discount-description format used in CouponsTable.jsx
 const formatCouponDiscount = (coupon) => {
@@ -73,14 +79,16 @@ const OrderDetails = () => {
   const [orderItems, setOrderItems] = useState([]);
   const [hasChanges, setHasChanges] = useState(false);
   
-  // State for status updates
-  const [selectedStatus, setSelectedStatus] = useState("");
-  const [statusChanged, setStatusChanged] = useState(false);
+  // State for status update dialog
+  const [openStatusDialog, setOpenStatusDialog] = useState(false);
+  const [newStatus, setNewStatus] = useState("");
+  const [codPaymentMethod, setCodPaymentMethod] = useState("");
   
   // State for shipping cost editing
   const [isEditingShipping, setIsEditingShipping] = useState(false);
   const [shippingCost, setShippingCost] = useState(0);
   const [shippingCostChanged, setShippingCostChanged] = useState(false);
+
   
   // State for adding items
   const [showAddItemDialog, setShowAddItemDialog] = useState(false);
@@ -95,14 +103,8 @@ const OrderDetails = () => {
   // State for image preview dialog
   const [previewImage, setPreviewImage] = useState(null);
 
-  const ORDER_STATUSES = [
-    "pending",
-    "processing", 
-    "confirmed",
-    "shipped",
-    "delivered",
-    "cancelled",
-  ];
+  const ORDER_STATUSES = ORDER_STATUS_VALUES;
+
 
   // Fetch order from API
   const { data: orderResponse, isLoading: isLoadingOrder, error } = useQuery({
@@ -112,6 +114,7 @@ const OrderDetails = () => {
   });
 
   const order = orderResponse?.response?.data;
+  const isCOD = isOrderCOD(order);
 
   // Extract user ID (handles string ID, populated object, or null)
   const userId = typeof order?.user === "object" ? order?.user?._id : order?.user;
@@ -273,6 +276,8 @@ const OrderDetails = () => {
       toast.success("Order updated successfully.");
       setHasChanges(false);
       setStatusChanged(false);
+      setCodPaymentMethodChanged(false);
+      setShowCodDialog(false);
       // Refetch the order data to get the latest state
       refetchOrderData();
     },
@@ -280,6 +285,25 @@ const OrderDetails = () => {
       toast.error(error?.response?.data?.message || "Failed to update order. Please try again.");
     },
   });
+
+  // Dedicated order status update mutation (PATCH /api/order/:id/status)
+  const { mutate: updateOrderStatusMutation, isLoading: isUpdatingStatus } = useMutation({
+    mutationFn: ({ orderId, status, codPaymentMethod }) =>
+      updateOrderStatus({ orderId, status, codPaymentMethod }),
+    onSuccess: (res) => {
+      if (res?.error || res?.response?.success === false) {
+        toast.error(res?.response?.data?.message || "Failed to update order status.");
+        return;
+      }
+      toast.success("Order status updated successfully.");
+      setOpenStatusDialog(false);
+      refetchOrderData();
+    },
+    onError: (error) => {
+      toast.error(error?.response?.data?.message || "Failed to update order status.");
+    },
+  });
+
 
   // Generate payment link mutation
   const { mutate: generatePaymentLinkMutation, isLoading: isGeneratingPaymentLink } = useMutation({
@@ -336,18 +360,22 @@ const OrderDetails = () => {
   });
 
 
-  // Initialize order items and status when order data loads
+  // Initialize order items and shipping cost when order data loads
   useEffect(() => {
     if (order?.items) {
       setOrderItems([...order.items]);
-    }
-    if (order?.status) {
-      setSelectedStatus(order.status);
     }
     if (order?.shippingCost !== undefined) {
       setShippingCost(order.shippingCost);
     }
   }, [order]);
+
+  // Open status update dialog
+  const onOpenStatusDialog = () => {
+    setNewStatus(order?.status || "pending");
+    setCodPaymentMethod(order?.codPaymentMethod || "");
+    setOpenStatusDialog(true);
+  };
 
   // Update quantity of an item
   const updateItemQuantity = (itemIndex, newQuantity) => {
@@ -375,11 +403,7 @@ const OrderDetails = () => {
     setHasChanges(true);
   };
 
-  // Handle status change
-  const handleStatusChange = (newStatus) => {
-    setSelectedStatus(newStatus);
-    setStatusChanged(newStatus !== (order.status || ''));
-  };
+
 
   // Handle shipping cost editing
   const handleShippingCostChange = (newCost) => {
@@ -452,11 +476,11 @@ const OrderDetails = () => {
     }
   };
 
-  // Update entire order (status + items + shipping)
+  // Update order items and shipping
   const handleUpdateOrder = async () => {
     try {
       // If no changes, show info message
-      if (!statusChanged && !hasChanges && !shippingCostChanged) {
+      if (!hasChanges && !shippingCostChanged) {
         toast.info("No changes to update");
         return;
       }
@@ -465,13 +489,15 @@ const OrderDetails = () => {
       const updateData = {
         orderId,
         // Always include status as it's required by the API
-        status: selectedStatus,
+        status: order?.status || "pending",
       };
 
       // Add shipping cost if changed
       if (shippingCostChanged) {
         updateData.shippingCost = shippingCost;
       }
+
+
 
       // Add products if items changed
       if (hasChanges) {
@@ -822,13 +848,23 @@ const OrderDetails = () => {
               </Typography>
               <Badge
                 variant="outline"
-                className={cn("text-xs font-medium uppercase px-2.5 py-0.5", getStatusBadgeClass(order.status))}
+                className={cn(
+                  "text-xs font-medium px-2.5 py-0.5 cursor-pointer hover:opacity-80 transition-opacity",
+                  getStatusBadgeClass(order.status)
+                )}
+                onClick={onOpenStatusDialog}
+                title="Click to update status"
               >
-                {order.status || "PENDING"}
+                {formatOrderStatus(order.status) || "Pending"}
               </Badge>
               {order.paymentMode && (
-                <Badge variant="outline" className="text-xs font-mono px-2 py-0.5">
+                <Badge variant="outline" className="text-xs font-mono px-2 py-0.5 uppercase">
                   {order.paymentMode}
+                </Badge>
+              )}
+              {order.codPaymentMethod && (
+                <Badge variant="secondary" className="text-xs font-mono px-2 py-0.5 font-medium">
+                  {order.codPaymentMethod === "cash" ? "💵 Paid by Cash" : order.codPaymentMethod === "upi" ? "📱 Paid by UPI" : order.codPaymentMethod}
                 </Badge>
               )}
             </div>
@@ -840,25 +876,18 @@ const OrderDetails = () => {
 
         {/* Header Action Bar */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Status Changer */}
-          <div className="flex items-center gap-1.5 bg-background border rounded-lg px-2.5 py-1">
-            <span className="text-xs font-medium text-muted-foreground">Status:</span>
-            <Select value={selectedStatus} onValueChange={handleStatusChange}>
-              <SelectTrigger className="h-7 w-28 text-xs border-0 shadow-none px-1 focus:ring-0">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ORDER_STATUSES.map((status) => (
-                  <SelectItem key={status} value={status} className="text-xs">
-                    {status.toUpperCase()}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {statusChanged && (
-              <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" title="Status modified" />
-            )}
-          </div>
+          {/* Update Status Button (Opens Dialog Box) */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onOpenStatusDialog}
+            className="h-9 gap-1.5 text-xs font-medium border-primary/20 hover:border-primary/50 hover:bg-primary/5"
+          >
+            <Truck className="h-3.5 w-3.5 text-primary" />
+            Update Status
+          </Button>
+
+
 
           {/* Generate Payment Link Button */}
           <Button
@@ -1127,9 +1156,16 @@ const OrderDetails = () => {
                   <Typography variant="small" className="text-muted-foreground text-xs block">
                     Payment Method
                   </Typography>
-                  <Badge variant="outline" className="font-mono text-xs mt-1">
-                    {order.paymentMode || "COD"}
-                  </Badge>
+                  <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                    <Badge variant="outline" className="font-mono text-xs uppercase">
+                      {order.paymentMode || "COD"}
+                    </Badge>
+                    {order.codPaymentMethod && (
+                      <Badge variant="secondary" className="font-mono text-[11px] font-medium">
+                        {order.codPaymentMethod === "cash" ? "💵 Paid by Cash" : order.codPaymentMethod === "upi" ? "📱 Paid by UPI" : order.codPaymentMethod}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <Typography variant="small" className="text-muted-foreground text-xs block">
@@ -1148,9 +1184,9 @@ const OrderDetails = () => {
                   </Typography>
                   <Badge
                     variant="outline"
-                    className={cn("text-xs font-medium uppercase mt-1", getStatusBadgeClass(order.status))}
+                    className={cn("text-xs font-medium mt-1", getStatusBadgeClass(order.status))}
                   >
-                    {order.status || "PENDING"}
+                    {formatOrderStatus(order.status) || "Pending"}
                   </Badge>
                 </div>
                 <div>
@@ -1662,10 +1698,19 @@ const OrderDetails = () => {
                 Item prices and product discounts are calculated based on applicable catalog pricing. Shipping charges can be customized using the edit button.
               </p>
               {order.paymentMode && (
-                <div className="inline-flex items-center gap-2 text-xs bg-muted/40 px-3 py-1.5 rounded-lg border">
+                <div className="inline-flex items-center gap-2 text-xs bg-muted/40 px-3 py-1.5 rounded-lg border flex-wrap">
                   <CreditCard className="h-3.5 w-3.5 text-primary" />
                   <span className="text-muted-foreground">Mode:</span>
                   <span className="font-semibold font-mono uppercase">{order.paymentMode}</span>
+                  {order.codPaymentMethod && (
+                    <>
+                      <span className="text-muted-foreground">•</span>
+                      <span className="text-muted-foreground">Collected:</span>
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-medium bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+                        {order.codPaymentMethod === "cash" ? "Paid by Cash" : order.codPaymentMethod === "upi" ? "Paid by UPI" : order.codPaymentMethod}
+                      </Badge>
+                    </>
+                  )}
                   <span className="text-muted-foreground">•</span>
                   <span className="text-muted-foreground">Status:</span>
                   <Badge variant={order.paymentStatus === "paid" ? "default" : "secondary"} className="text-[10px] px-1.5 py-0 capitalize">
@@ -1779,24 +1824,29 @@ const OrderDetails = () => {
                 disabled={isUpdating}
                 className={cn(
                   "font-medium shadow-xs transition-all",
-                  (hasChanges || statusChanged || shippingCostChanged) &&
+                  (hasChanges || shippingCostChanged) &&
                     "bg-emerald-600 hover:bg-emerald-700 text-white"
                 )}
                 size="default"
               >
                 <Save className="h-4 w-4 mr-2" />
-                {isUpdating ? "Saving..." : (hasChanges || statusChanged || shippingCostChanged) ? "Save Changes ●" : "Save Changes"}
+                {isUpdating
+                  ? "Saving..."
+                  : (hasChanges || shippingCostChanged)
+                  ? "Save Changes ●"
+                  : "Save Changes"}
               </Button>
-              {(hasChanges || statusChanged || shippingCostChanged) && (
+              {(hasChanges || shippingCostChanged) && (
                 <Badge variant="outline" className="text-amber-600 border-amber-300 dark:text-amber-400 font-medium text-xs">
-                  ● Unsaved: {[hasChanges && "Items", statusChanged && "Status", shippingCostChanged && "Shipping"].filter(Boolean).join(", ")}
+                  ● Unsaved: {[hasChanges && "Items", shippingCostChanged && "Shipping"].filter(Boolean).join(", ")}
                 </Badge>
               )}
             </div>
             <Typography variant="small" className="text-muted-foreground text-xs">
-              Status, quantities, or shipping changes will be saved to the database.
+              Item quantities or shipping changes will be saved to the database.
             </Typography>
           </div>
+
 
           {/* Logistics & Tracking Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1941,9 +1991,151 @@ const OrderDetails = () => {
             </Card>
           </div>
 
+      {/* Update Order Status Dialog */}
+      <Dialog open={openStatusDialog} onOpenChange={setOpenStatusDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Update Order Status</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-1">
+            <div className="flex items-center justify-between text-xs bg-muted/40 p-2.5 rounded-lg border">
+              <div>
+                <span className="text-muted-foreground block text-[11px]">Order</span>
+                <span className="font-mono font-semibold text-sm">
+                  {order?.orderNumber ? `#${order.orderNumber}` : `#${order?._id?.slice(-6).toUpperCase()}`}
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-muted-foreground block text-[11px]">Payment Mode</span>
+                <Badge variant="outline" className="font-mono text-xs uppercase">
+                  {order?.paymentMode || "COD"}
+                </Badge>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">
+                Select New Status
+              </label>
+              <Select value={newStatus} onValueChange={setNewStatus}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ORDER_STATUSES.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {formatOrderStatus(status)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* COD Payment Collection Selector (Required when marking COD orders as Delivered) */}
+            {isCOD && newStatus === "delivered" && (
+              <div className="space-y-2.5 pt-3 border-t">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
+                    <Banknote className="h-4 w-4 text-emerald-600" />
+                    <span>COD Payment Collection</span>
+                    <span className="text-destructive">*</span>
+                  </label>
+                  <Badge variant="outline" className="text-[10px] uppercase font-mono text-amber-600 border-amber-300 dark:border-amber-700">
+                    COD Delivery
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Select how the delivery agent collected payment from the customer:
+                </p>
+
+                <div className="grid grid-cols-2 gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setCodPaymentMethod("cash")}
+                    className={cn(
+                      "flex flex-col items-center justify-center gap-1.5 p-3 rounded-lg border text-xs font-medium transition-all cursor-pointer relative",
+                      codPaymentMethod === "cash"
+                        ? "border-emerald-600 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-500 ring-2 ring-emerald-500/30 font-semibold shadow-xs"
+                        : "border-border hover:bg-muted/60 text-muted-foreground"
+                    )}
+                  >
+                    <Banknote className={cn("h-5 w-5", codPaymentMethod === "cash" ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")} />
+                    <span>Paid by Cash</span>
+                    <span className="text-[10px] font-normal text-muted-foreground">Cash on Hand</span>
+                    {codPaymentMethod === "cash" && (
+                      <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 text-white text-[10px]">
+                        ✓
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCodPaymentMethod("upi")}
+                    className={cn(
+                      "flex flex-col items-center justify-center gap-1.5 p-3 rounded-lg border text-xs font-medium transition-all cursor-pointer relative",
+                      codPaymentMethod === "upi"
+                        ? "border-blue-600 bg-blue-50 text-blue-900 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-500 ring-2 ring-blue-500/30 font-semibold shadow-xs"
+                        : "border-border hover:bg-muted/60 text-muted-foreground"
+                    )}
+                  >
+                    <QrCode className={cn("h-5 w-5", codPaymentMethod === "upi" ? "text-blue-600 dark:text-blue-400" : "text-muted-foreground")} />
+                    <span>Paid by UPI</span>
+                    <span className="text-[10px] font-normal text-muted-foreground">QR / Online Scan</span>
+                    {codPaymentMethod === "upi" && (
+                      <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-white text-[10px]">
+                        ✓
+                      </span>
+                    )}
+                  </button>
+                </div>
+
+                {!codPaymentMethod && (
+                  <p className="text-[11px] text-destructive font-medium">
+                    * Please choose Paid by Cash or Paid by UPI before marking as Delivered.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setOpenStatusDialog(false)}
+              disabled={isUpdatingStatus}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (isCOD && newStatus === "delivered" && !codPaymentMethod) {
+                  toast.error("Please select a COD payment collection method (Paid by Cash or Paid by UPI).");
+                  return;
+                }
+                updateOrderStatusMutation({
+                  orderId,
+                  status: newStatus,
+                  codPaymentMethod:
+                    isCOD && newStatus === "delivered" ? codPaymentMethod : undefined,
+                });
+              }}
+              disabled={
+                isUpdatingStatus ||
+                !newStatus ||
+                (isCOD && newStatus === "delivered" && !codPaymentMethod)
+              }
+            >
+              {isUpdatingStatus ? "Updating..." : "Update Status"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Item Image Fullscreen Preview Dialog */}
       <Dialog open={!!previewImage} onOpenChange={() => setPreviewImage(null)}>
+
         <DialogContent className="max-w-xl p-3">
           <DialogHeader className="p-2 pb-0">
             <DialogTitle className="text-sm font-medium text-muted-foreground">Image Preview</DialogTitle>

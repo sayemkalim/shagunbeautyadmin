@@ -4,6 +4,7 @@ import { endpoints } from "@/api/endpoints";
 export const updateOrder = async ({ 
   orderId, 
   status, 
+  codPaymentMethod,
   addressId, 
   products = [], 
   bundles = [], 
@@ -22,6 +23,10 @@ export const updateOrder = async ({
     const updateData = {
       status, // Always include status as it's required
     };
+
+    if (codPaymentMethod) {
+      updateData.codPaymentMethod = codPaymentMethod;
+    }
     
     // Add addressId if provided
     if (addressId) {

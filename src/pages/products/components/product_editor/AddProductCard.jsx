@@ -98,7 +98,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
         name: "",
         price: "",
         discounted_price: "",
-        inventory: "",
+        inventory: 1,
         color: "",
         weight_in_grams: "",
         weight_unit: "g",
@@ -186,7 +186,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
           name: "",
           price: "",
           discounted_price: "",
-          inventory: "",
+          inventory: 1,
           color: "",
           weight_in_grams: "",
           weight_unit: "g",
@@ -393,7 +393,12 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
                 name: v.name || "",
                 price: v.price || "",
                 discounted_price: v.discounted_price || "",
-                inventory: v.inventory || "",
+                inventory:
+                  v.inventory !== undefined && v.inventory !== null && v.inventory !== ""
+                    ? Number(v.inventory) === 0 || v.inventory === false || v.inventory === "0"
+                      ? 0
+                      : 1
+                    : 1,
                 color: v.color || "",
                 weight_in_grams: parseWeightAndUnit(v.weight_in_grams, v.name || initialData.name || "").weight,
                 weight_unit: parseWeightAndUnit(v.weight_in_grams, v.name || initialData.name || "").unit,
@@ -412,7 +417,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
                 name: "",
                 price: "",
                 discounted_price: "",
-                inventory: "",
+                inventory: 1,
                 color: "",
                 weight_in_grams: "",
                 weight_unit: "g",
@@ -587,7 +592,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
 
     // ✅ Variants - only send if there are meaningful variants
     const validVariants = formData.variants.filter(variant => 
-      variant.sku.trim() || variant.name.trim() || variant.price || variant.discounted_price || variant.inventory || (variant.images && variant.images.length > 0)
+      variant.sku.trim() || variant.name.trim() || variant.price || variant.discounted_price || (variant.images && variant.images.length > 0)
     );
     
     validVariants.forEach((variant, i) => {
@@ -596,7 +601,11 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
       form.append(`variants[${i}][name]`, syncedVariantName || variant.name);
       form.append(`variants[${i}][price]`, variant.price);
       form.append(`variants[${i}][discounted_price]`, variant.discounted_price);
-      form.append(`variants[${i}][inventory]`, variant.inventory);
+      const variantInventory =
+        variant.inventory === 0 || variant.inventory === "0" || variant.inventory === false
+          ? 0
+          : 1;
+      form.append(`variants[${i}][inventory]`, variantInventory);
       form.append(`variants[${i}][color]`, variant.color);
       form.append(`variants[${i}][weight_in_grams]`, variant.weight_in_grams);
       form.append(`variants[${i}][weight_unit]`, variant.weight_unit || "g");
@@ -1082,14 +1091,17 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
 
                 <div className="flex flex-col">
                   <Label htmlFor={`inventory-${index}`} className="mb-1">Inventory</Label>
-                  <Input
+                  <select
                     id={`inventory-${index}`}
-                    type="number"
-                    value={variant.inventory}
+                    value={variant.inventory === 0 || variant.inventory === "0" || variant.inventory === false ? "0" : "1"}
                     onChange={(e) =>
-                      handleVariantChange(index, "inventory", e.target.value)
+                      handleVariantChange(index, "inventory", Number(e.target.value))
                     }
-                  />
+                    className="border-input bg-background text-foreground focus-visible:ring-ring/50 h-9 w-full rounded-md border px-3 py-1.5 text-sm shadow-elegant-sm outline-none focus-visible:ring-[3px] cursor-pointer"
+                  >
+                    <option value="1">In Stock</option>
+                    <option value="0">Out of Stock</option>
+                  </select>
                 </div>
 
                 <div className="flex flex-col">
