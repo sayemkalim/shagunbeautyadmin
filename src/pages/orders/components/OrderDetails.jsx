@@ -26,6 +26,10 @@ import {
   ExternalLink,
   Banknote,
   QrCode,
+  RotateCcw,
+  CheckCircle2,
+  XCircle,
+  Clock,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -50,8 +54,9 @@ import { triggerBillDownload } from "../helpers/triggerBillDownload";
 import { fetchUserById } from "@/pages/users/helpers/fetchUserById";
 import { fetchProducts } from "@/pages/products/components/helpers/fetchProducts";
 import { fetchBundle } from "@/pages/bundles/helpers/fetchBundle";
-import { getStatusBadgeClass, formatOrderStatus } from "../helpers/statusBadge";
+import { getStatusBadgeClass, formatOrderStatus, formatRefundMode, formatRefundStatus, getRefundStatusBadgeClass } from "../helpers/statusBadge";
 import { isOrderCOD } from "../helpers/isOrderCOD";
+import InlineRefundCard from "./InlineRefundCard";
 import { ORDER_STATUS_VALUES } from "@/constant";
 import { cn } from "@/lib/utils";
 
@@ -115,6 +120,12 @@ const OrderDetails = () => {
 
   const order = orderResponse?.response?.data;
   const isCOD = isOrderCOD(order);
+  const isRefunded = Boolean(
+    order?.status === "refunded" ||
+    order?.status === "refund_initiated" ||
+    order?.status === "refund_failed" ||
+    order?.refundStatus
+  );
 
   // Extract user ID (handles string ID, populated object, or null)
   const userId = typeof order?.user === "object" ? order?.user?._id : order?.user;
@@ -887,7 +898,21 @@ const OrderDetails = () => {
             Update Status
           </Button>
 
-
+          {/* Manage Refund Button (Shown only when order status is refunded) */}
+          {isRefunded && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const el = document.getElementById("order-refund-section");
+                if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+              }}
+              className="h-9 gap-1.5 text-xs font-medium border-rose-300 text-rose-700 hover:bg-rose-50 hover:text-rose-800 dark:border-rose-900/60 dark:text-rose-400 dark:hover:bg-rose-950/40"
+            >
+              <RotateCcw className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+              Manage Refund
+            </Button>
+          )}
 
           {/* Generate Payment Link Button */}
           <Button
@@ -1244,10 +1269,29 @@ const OrderDetails = () => {
                   </div>
                 </div>
               )}
+
+              {isRefunded && (
+                <div className="pt-2 border-t flex justify-between items-center text-xs">
+                  <div className="flex items-center gap-1 text-rose-600 dark:text-rose-400 font-medium">
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    <span>Refunded:</span>
+                  </div>
+                  <Badge variant="outline" className="border-rose-300 text-rose-700 bg-rose-50 dark:bg-rose-950/40 dark:text-rose-300 font-mono text-xs font-bold">
+                    ₹{Number(order.refundAmount || order.finalTotalAmount || 0).toFixed(2)} ({formatRefundMode(order.refundMode)})
+                  </Badge>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Embedded Inline Refund Management Section (Shown ONLY when order status is refunded) */}
+      {isRefunded && (
+        <div id="order-refund-section">
+          <InlineRefundCard order={order} onUpdated={refetchOrderData} />
+        </div>
+      )}
 
       {/* Order Items */}
       <Card>
@@ -2018,7 +2062,13 @@ const OrderDetails = () => {
               <label className="text-xs font-semibold text-foreground">
                 Select New Status
               </label>
-              <Select value={newStatus} onValueChange={setNewStatus}>
+              <Select value={newStatus} onValueChange={(val) => {
+                setNewStatus(val);
+                if (val === "refunded") {
+                  setOpenStatusDialog(false);
+                  setOpenRefundModal(true);
+                }
+              }}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select Status" />
                 </SelectTrigger>
@@ -2031,6 +2081,30 @@ const OrderDetails = () => {
                 </SelectContent>
               </Select>
             </div>
+
+            {newStatus === "refunded" && (
+              <div className="p-3 rounded-lg border bg-rose-50/50 border-rose-200 dark:bg-rose-950/20 dark:border-rose-900/40 space-y-2 text-xs">
+                <div className="flex items-center gap-1.5 font-semibold text-rose-700 dark:text-rose-400">
+                  <RotateCcw className="h-4 w-4" />
+                  <span>Refund Details Required</span>
+                </div>
+                <p className="text-muted-foreground">
+                  To mark an order as Refunded, please enter the refund method, amount, UTR/Transaction ID, and destination.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    setOpenStatusDialog(false);
+                    setOpenRefundModal(true);
+                  }}
+                  className="w-full bg-rose-600 hover:bg-rose-700 text-white gap-1.5 h-8 text-xs font-medium"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Open Refund Form
+                </Button>
+              </div>
+            )}
 
             {/* COD Payment Collection Selector (Required when marking COD orders as Delivered) */}
             {isCOD && newStatus === "delivered" && (

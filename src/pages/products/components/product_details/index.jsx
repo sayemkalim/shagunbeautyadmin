@@ -318,6 +318,33 @@ const ProductDetails = () => {
               ))}
             </div>
           )}
+
+          {Array.isArray(variant.price_tiers) && variant.price_tiers.length > 0 && (
+            <div className="mt-3 bg-muted/40 rounded-md border p-2.5 space-y-1.5">
+              <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <Layers size={13} className="text-primary" /> Bulk Pricing
+              </span>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-muted-foreground text-left border-b border-border/50">
+                    <th className="pb-1 font-medium">Quantity Range</th>
+                    <th className="pb-1 font-medium text-right">Price Per Unit</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/30">
+                  {variant.price_tiers.map((tier, idx) => (
+                    <tr key={idx} className="text-foreground">
+                      <td className="py-1">
+                        {tier.min_qty}
+                        {tier.max_qty ? ` - ${tier.max_qty}` : "+"} units
+                      </td>
+                      <td className="py-1 font-medium text-right">₹{tier.price}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       ))}
     </div>

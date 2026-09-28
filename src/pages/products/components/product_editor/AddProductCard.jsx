@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import Typography from "@/components/typography";
 import NavbarItem from "@/components/navbar/navbar_item";
@@ -105,6 +106,8 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
         expiry_date: "",
         images: [],
         imagePreviews: [],
+        enable_bulk_pricing: false,
+        price_tiers: [],
       },
     ],
     priceTiers: [],
@@ -193,9 +196,61 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
           expiry_date: "",
           images: [],
           imagePreviews: [],
+          enable_bulk_pricing: false,
+          price_tiers: [],
         },
       ],
     }));
+  };
+
+  const handleVariantPriceTierChange = (variantIndex, tierIndex, field, value) => {
+    setFormData((prev) => {
+      const updatedVariants = [...prev.variants];
+      const currentVariant = { ...updatedVariants[variantIndex] };
+      const priceTiers = [...(currentVariant.price_tiers || [])];
+      priceTiers[tierIndex] = { ...priceTiers[tierIndex], [field]: value };
+      currentVariant.price_tiers = priceTiers;
+      updatedVariants[variantIndex] = currentVariant;
+      return { ...prev, variants: updatedVariants };
+    });
+  };
+
+  const addVariantPriceTier = (variantIndex) => {
+    setFormData((prev) => {
+      const updatedVariants = [...prev.variants];
+      const currentVariant = { ...updatedVariants[variantIndex] };
+      const priceTiers = [...(currentVariant.price_tiers || [])];
+      priceTiers.push({ min_qty: "", max_qty: "", price: "" });
+      currentVariant.price_tiers = priceTiers;
+      currentVariant.enable_bulk_pricing = true;
+      updatedVariants[variantIndex] = currentVariant;
+      return { ...prev, variants: updatedVariants };
+    });
+  };
+
+  const removeVariantPriceTier = (variantIndex, tierIndex) => {
+    setFormData((prev) => {
+      const updatedVariants = [...prev.variants];
+      const currentVariant = { ...updatedVariants[variantIndex] };
+      const priceTiers = [...(currentVariant.price_tiers || [])];
+      priceTiers.splice(tierIndex, 1);
+      currentVariant.price_tiers = priceTiers;
+      updatedVariants[variantIndex] = currentVariant;
+      return { ...prev, variants: updatedVariants };
+    });
+  };
+
+  const toggleVariantBulkPricing = (variantIndex, enabled) => {
+    setFormData((prev) => {
+      const updatedVariants = [...prev.variants];
+      const currentVariant = { ...updatedVariants[variantIndex] };
+      currentVariant.enable_bulk_pricing = enabled;
+      if (enabled && (!currentVariant.price_tiers || currentVariant.price_tiers.length === 0)) {
+        currentVariant.price_tiers = [{ min_qty: "", max_qty: "", price: "" }];
+      }
+      updatedVariants[variantIndex] = currentVariant;
+      return { ...prev, variants: updatedVariants };
+    });
   };
 
   const removeVariant = (index) => {
@@ -377,12 +432,38 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
         is_bakery: Boolean(initialData.is_bakery),
         is_best_seller: Boolean(initialData.is_best_seller),
         variants: Array.isArray(initialData.variants) && initialData.variants.length > 0
-          ? initialData.variants.map(v => {
+          ? initialData.variants.map((v) => {
               const vImages = Array.isArray(v.images)
                 ? v.images
                 : v.image
                 ? [v.image]
                 : [];
+
+              let rawTiers = v.price_tiers ?? v.priceTiers ?? [];
+              if (typeof rawTiers === "string") {
+                try {
+                  rawTiers = JSON.parse(rawTiers);
+                } catch {
+                  rawTiers = [];
+                }
+              }
+              const mappedTiers = Array.isArray(rawTiers)
+                ? rawTiers.map((tier) => ({
+                    min_qty:
+                      tier.min_qty !== undefined && tier.min_qty !== null
+                        ? tier.min_qty
+                        : tier.quantity ?? tier.minQty ?? "",
+                    max_qty:
+                      tier.max_qty !== undefined && tier.max_qty !== null
+                        ? tier.max_qty
+                        : tier.maxQty ?? "",
+                    price:
+                      tier.price !== undefined && tier.price !== null
+                        ? tier.price
+                        : "",
+                  }))
+                : [];
+
               return {
                 sku: v.sku || "",
                 // The sku this variant is persisted under on the backend, kept
@@ -409,6 +490,10 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
                   preview: imgUrl,
                   isFromServer: true,
                 })),
+                enable_bulk_pricing:
+                  mappedTiers.length > 0 ||
+                  Boolean(v.enable_bulk_pricing || v.enableBulkPricing),
+                price_tiers: mappedTiers,
               };
             })
           : [
@@ -424,6 +509,8 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
                 expiry_date: "",
                 images: [],
                 imagePreviews: [],
+                enable_bulk_pricing: false,
+                price_tiers: [],
               },
             ],
         priceTiers: Array.isArray(initialData.price_tiers)
@@ -535,6 +622,54 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
     }
     setPriceTierErrors({});
 
+    // Validate variant bulk pricing tiers
+    for (let i = 0; i < formData.variants.length; i++) {
+      const variant = formData.variants[i];
+      if (variant.enable_bulk_pricing && Array.isArray(variant.price_tiers)) {
+        const seenQuantities = new Set();
+        for (let j = 0; j < variant.price_tiers.length; j++) {
+          const tier = variant.price_tiers[j];
+          const minQtyStr = String(tier.min_qty ?? tier.quantity ?? "").trim();
+          const maxQtyStr = String(tier.max_qty ?? "").trim();
+          const priceStr = String(tier.price ?? "").trim();
+
+          // If completely empty row, ignore it
+          if (!minQtyStr && !maxQtyStr && !priceStr) continue;
+
+          const minQtyNum = Number(minQtyStr);
+          if (!minQtyStr || !Number.isInteger(minQtyNum) || minQtyNum < 2) {
+            toast.error(
+              `Variant ${variant.sku || i + 1}: Each price tier Min Qty must be a whole number of 2 or more`
+            );
+            return;
+          }
+          if (seenQuantities.has(minQtyNum)) {
+            toast.error(
+              `Variant ${variant.sku || i + 1}: Duplicate quantity ${minQtyNum} — each tier needs a unique Min Qty`
+            );
+            return;
+          }
+          seenQuantities.add(minQtyNum);
+
+          if (maxQtyStr) {
+            const maxQtyNum = Number(maxQtyStr);
+            if (isNaN(maxQtyNum) || maxQtyNum < minQtyNum) {
+              toast.error(
+                `Variant ${variant.sku || i + 1}: Max Qty must be greater than or equal to Min Qty`
+              );
+              return;
+            }
+          }
+          if (!priceStr || isNaN(Number(priceStr)) || Number(priceStr) < 0) {
+            toast.error(
+              `Variant ${variant.sku || i + 1}: Price must be a valid number of 0 or more`
+            );
+            return;
+          }
+        }
+      }
+    }
+
     const form = new FormData();
     const syncedName = syncNameWithWeightAndUnit(formData.name, formData.weight_in_grams, formData.weight_unit);
     form.append("name", syncedName);
@@ -613,6 +748,30 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
       if (variant.expiry_date) {
         form.append(`variants[${i}][expiry_date]`, variant.expiry_date);
       }
+
+      // Bulk pricing tiers for variant
+      const variantPriceTiers = variant.enable_bulk_pricing && Array.isArray(variant.price_tiers)
+        ? variant.price_tiers
+            .filter((t) => {
+              const minStr = String(t.min_qty ?? t.quantity ?? "").trim();
+              const priceStr = String(t.price ?? "").trim();
+              return minStr !== "" && priceStr !== "";
+            })
+            .map((t) => {
+              const qty = Number(t.min_qty !== "" && t.min_qty !== undefined && t.min_qty !== null ? t.min_qty : t.quantity);
+              return {
+                quantity: qty,
+                min_qty: qty,
+                max_qty:
+                  t.max_qty !== "" && t.max_qty !== null && t.max_qty !== undefined && !isNaN(Number(t.max_qty))
+                    ? Number(t.max_qty)
+                    : null,
+                price: Number(t.price),
+              };
+            })
+        : [];
+
+      form.append(`variants[${i}][price_tiers]`, JSON.stringify(variantPriceTiers));
 
       // Append existing variant image URLs
       if (isEditMode && variant.imagePreviews && variant.imagePreviews.length > 0) {
@@ -1192,6 +1351,142 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
                   </div>
                 </div>
               )}
+
+              {/* Variant Bulk Pricing Section */}
+              <div className="border-border/70 bg-card/50 mt-4 rounded-lg border p-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center space-x-3">
+                    <Switch
+                      id={`variant-bulk-pricing-${index}`}
+                      checked={Boolean(variant.enable_bulk_pricing)}
+                      onCheckedChange={(checked) => toggleVariantBulkPricing(index, checked)}
+                    />
+                    <Label
+                      htmlFor={`variant-bulk-pricing-${index}`}
+                      className="text-sm font-semibold cursor-pointer select-none text-foreground flex items-center gap-1.5"
+                    >
+                      Enable Bulk Pricing for this Variant
+                    </Label>
+                  </div>
+
+                  {variant.enable_bulk_pricing && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => addVariantPriceTier(index)}
+                      className="h-8 gap-1.5 text-xs"
+                    >
+                      <PlusCircle size={14} />
+                      Add Tier
+                    </Button>
+                  )}
+                </div>
+
+                {variant.enable_bulk_pricing && (
+                  <div className="space-y-3 pt-2">
+                    {(!variant.price_tiers || variant.price_tiers.length === 0) ? (
+                      <div className="text-center py-4 border border-dashed rounded-md bg-muted/20">
+                        <p className="text-xs text-muted-foreground">
+                          No price tiers configured for this variant yet.
+                        </p>
+                        <Button
+                          type="button"
+                          variant="link"
+                          size="sm"
+                          onClick={() => addVariantPriceTier(index)}
+                          className="text-xs text-primary font-medium mt-1 h-auto p-0"
+                        >
+                          + Click here to add the first tier
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto rounded-md border border-border/60 bg-background/50">
+                        <table className="w-full text-xs text-left">
+                          <thead className="bg-muted/40">
+                            <tr className="border-b border-border text-muted-foreground">
+                              <th className="py-2.5 px-3 font-medium">Min Qty</th>
+                              <th className="py-2.5 px-3 font-medium">Max Qty (optional)</th>
+                              <th className="py-2.5 px-3 font-medium">Price (₹)</th>
+                              <th className="py-2.5 px-3 w-12 text-center font-medium">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border/40">
+                            {variant.price_tiers.map((tier, tierIdx) => (
+                              <tr key={tierIdx} className="hover:bg-muted/20 transition-colors">
+                                <td className="py-2 px-3">
+                                  <Input
+                                    type="number"
+                                    min="2"
+                                    step="1"
+                                    placeholder="e.g. 2"
+                                    value={tier.min_qty ?? ""}
+                                    onChange={(e) =>
+                                      handleVariantPriceTierChange(
+                                        index,
+                                        tierIdx,
+                                        "min_qty",
+                                        e.target.value
+                                      )
+                                    }
+                                    className="h-8 text-xs bg-background"
+                                  />
+                                </td>
+                                <td className="py-2 px-3">
+                                  <Input
+                                    type="number"
+                                    min="2"
+                                    step="1"
+                                    placeholder="e.g. 10 (or leave blank)"
+                                    value={tier.max_qty ?? ""}
+                                    onChange={(e) =>
+                                      handleVariantPriceTierChange(
+                                        index,
+                                        tierIdx,
+                                        "max_qty",
+                                        e.target.value
+                                      )
+                                    }
+                                    className="h-8 text-xs bg-background"
+                                  />
+                                </td>
+                                <td className="py-2 px-3">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    placeholder="e.g. 350"
+                                    value={tier.price ?? ""}
+                                    onChange={(e) =>
+                                      handleVariantPriceTierChange(
+                                        index,
+                                        tierIdx,
+                                        "price",
+                                        e.target.value
+                                      )
+                                    }
+                                    className="h-8 text-xs bg-background"
+                                  />
+                                </td>
+                                <td className="py-2 px-3 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => removeVariantPriceTier(index, tierIdx)}
+                                    className="text-muted-foreground hover:text-destructive p-1 rounded transition-colors"
+                                    title="Delete Tier"
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           ))}
           <Button onClick={addVariant} type="button" variant="outline">

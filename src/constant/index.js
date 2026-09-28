@@ -25,7 +25,9 @@ export const ORDER_STATUSES = [
   { value: "out_for_delivery", label: "Out for Delivery" },
   { value: "delivered", label: "Delivered" },
   { value: "cancelled", label: "Cancelled" },
-  { value: "refunded", label: "Refunded" },
+  { value: "refund_initiated", label: "Refund Initiated ⏳" },
+  { value: "refunded", label: "Refunded ✅" },
+  { value: "refund_failed", label: "Refund Failed ❌" },
 ];
 
 export const ORDER_STATUS_VALUES = [
@@ -35,6 +37,8 @@ export const ORDER_STATUS_VALUES = [
   "out_for_delivery",
   "delivered",
   "cancelled",
+  "refund_initiated",
   "refunded",
+  "refund_failed",
 ];
 

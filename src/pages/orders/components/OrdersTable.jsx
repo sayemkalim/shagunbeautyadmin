@@ -24,14 +24,16 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Banknote, QrCode } from "lucide-react";
+import { Banknote, QrCode, RotateCcw, CheckCircle2, XCircle } from "lucide-react";
 import { fetchOrders } from "../helpers/fetchOrders";
 import { updateOrderStatus } from "../helpers/updateOrderStatus";
 import { bulkUpdateOrderStatus } from "../helpers/bulkUpdateOrderStatus";
 import { fetchOrderBill } from "../helpers/fetchOrderBill";
 import { triggerBillDownload } from "../helpers/triggerBillDownload";
-import { getStatusBadgeClass, formatOrderStatus } from "../helpers/statusBadge";
+import { getStatusBadgeClass, formatOrderStatus, formatRefundMode, formatRefundStatus } from "../helpers/statusBadge";
 import { isOrderCOD } from "../helpers/isOrderCOD";
+import RefundModal from "./RefundModal";
+import RefundStatusModal from "./RefundStatusModal";
 import { ORDER_STATUS_VALUES } from "@/constant";
 import { cn } from "@/lib/utils";
 
@@ -73,6 +75,9 @@ const OrdersTable = ({
   const [bulkStatus, setBulkStatus] = useState("");
   const [downloadingOrderId, setDownloadingOrderId] = useState(null);
   const [regeneratingOrderId, setRegeneratingOrderId] = useState(null);
+  const [openRefundModal, setOpenRefundModal] = useState(false);
+  const [openRefundStatusModal, setOpenRefundStatusModal] = useState(false);
+  const [refundStatusTarget, setRefundStatusTarget] = useState("processed");
 
   const { mutate: updateOrderStatusMutation, isLoading: isUpdating } =
     useMutation({
@@ -387,29 +392,77 @@ const OrdersTable = ({
     {
       key: "status",
       label: "Status",
-      render: (status, row) => (
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <Badge
-              className={cn("w-fit cursor-pointer font-medium", getStatusBadgeClass(status))}
-              onClick={() => onOpenStatusDialog(row)}
-              title="Click to update status"
-            >
-              {formatOrderStatus(status)}
-            </Badge>
-            {row?.paymentMode && (
-              <Badge variant="outline" className="w-fit text-[11px] font-mono uppercase">
-                {row.paymentMode}
+      render: (status, row) => {
+        const isRefundState =
+          status === "refunded" ||
+          status === "refund_initiated" ||
+          status === "refund_failed" ||
+          Boolean(row?.refundStatus);
+
+        return (
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <Badge
+                className={cn("w-fit cursor-pointer font-medium", getStatusBadgeClass(status))}
+                onClick={() => onOpenStatusDialog(row)}
+                title="Click to update status"
+              >
+                {formatOrderStatus(status)}
               </Badge>
-            )}
-            {row?.codPaymentMethod && (
-              <Badge variant="secondary" className="w-fit text-[10px] px-1.5 py-0 font-medium">
-                {row.codPaymentMethod === "cash" ? "💵 Cash" : row.codPaymentMethod === "upi" ? "📱 UPI" : row.codPaymentMethod}
-              </Badge>
-            )}
+              {row?.paymentMode && (
+                <Badge variant="outline" className="w-fit text-[11px] font-mono uppercase">
+                  {row.paymentMode}
+                </Badge>
+              )}
+              {row?.codPaymentMethod && (
+                <Badge variant="secondary" className="w-fit text-[10px] px-1.5 py-0 font-medium">
+                  {row.codPaymentMethod === "cash" ? "💵 Cash" : row.codPaymentMethod === "upi" ? "📱 UPI" : row.codPaymentMethod}
+                </Badge>
+              )}
+              {isRefundState && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "w-fit cursor-pointer text-[10px] px-1.5 py-0 font-medium flex items-center gap-1 border",
+                        row?.refundStatus === "failed" || row?.status === "refund_failed"
+                          ? "border-rose-300 text-rose-700 bg-rose-50 dark:bg-rose-950/40 dark:text-rose-300"
+                          : (row?.refundStatus === "initiated" || row?.refundStatus === "pending" || row?.status === "refund_initiated")
+                          ? "border-amber-300 text-amber-700 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-300"
+                          : "border-emerald-300 text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300"
+                      )}
+                      onClick={() => {
+                        setSelectedOrder(row);
+                        setOpenRefundModal(true);
+                      }}
+                    >
+                      <RotateCcw className="h-2.5 w-2.5" />
+                      <span>
+                        {row?.refundStatus === "failed" || row?.status === "refund_failed"
+                          ? "❌ Refund Failed"
+                          : (row?.refundStatus === "initiated" || row?.refundStatus === "pending" || row?.status === "refund_initiated")
+                          ? "⏳ Refund Initiated"
+                          : "✅ Refunded"}
+                        : ₹{Number(row.refundAmount || row.finalTotalAmount || 0).toFixed(0)}
+                      </span>
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent className="text-xs space-y-1 p-2">
+                    <div className="font-semibold text-foreground">
+                      Status: {formatRefundStatus(row.refundStatus || row.status)}
+                    </div>
+                    <div>Amount: ₹{Number(row.refundAmount || row.finalTotalAmount || 0).toFixed(2)}</div>
+                    <div>Mode: {formatRefundMode(row.refundMode)}</div>
+                    {row.refundTransactionId && <div>UTR/Ref: {row.refundTransactionId}</div>}
+                    {row.refundTo && <div>To: {row.refundTo}</div>}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       key: "finalTotalAmount",
@@ -451,6 +504,52 @@ const OrdersTable = ({
                 icon: Eye,
                 action: () => navigate(`/dashboard/orders/${order._id}`),
               },
+              ...(order.status === "refunded" ||
+              order.status === "refund_initiated" ||
+              order.status === "refund_failed" ||
+              order.refundStatus
+                ? (order.refundStatus === "initiated" ||
+                  order.refundStatus === "pending" ||
+                  order.status === "refund_initiated"
+                    ? [
+                        {
+                          label: "Mark Processed ✅",
+                          icon: CheckCircle2,
+                          action: () => {
+                            setSelectedOrder(order);
+                            setRefundStatusTarget("processed");
+                            setOpenRefundStatusModal(true);
+                          },
+                        },
+                        {
+                          label: "Mark Failed ❌",
+                          icon: XCircle,
+                          action: () => {
+                            setSelectedOrder(order);
+                            setRefundStatusTarget("failed");
+                            setOpenRefundStatusModal(true);
+                          },
+                        },
+                        {
+                          label: "Edit Refund Details",
+                          icon: RotateCcw,
+                          action: () => {
+                            setSelectedOrder(order);
+                            setOpenRefundModal(true);
+                          },
+                        },
+                      ]
+                    : [
+                        {
+                          label: "Edit Refund Details",
+                          icon: RotateCcw,
+                          action: () => {
+                            setSelectedOrder(order);
+                            setOpenRefundModal(true);
+                          },
+                        },
+                      ])
+                : []),
               ...(order.status !== "pending"
                 ? [
                     {
@@ -608,7 +707,13 @@ const OrdersTable = ({
               <label className="text-xs font-semibold text-foreground">
                 Select New Status
               </label>
-              <Select value={newStatus} onValueChange={setNewStatus}>
+              <Select value={newStatus} onValueChange={(val) => {
+                setNewStatus(val);
+                if (val === "refunded") {
+                  setOpenStatusDialog(false);
+                  setOpenRefundModal(true);
+                }
+              }}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select Status" />
                 </SelectTrigger>
@@ -621,6 +726,30 @@ const OrdersTable = ({
                 </SelectContent>
               </Select>
             </div>
+
+            {newStatus === "refunded" && (
+              <div className="p-3 rounded-lg border bg-rose-50/50 border-rose-200 dark:bg-rose-950/20 dark:border-rose-900/40 space-y-2 text-xs">
+                <div className="flex items-center gap-1.5 font-semibold text-rose-700 dark:text-rose-400">
+                  <RotateCcw className="h-4 w-4" />
+                  <span>Refund Details Required</span>
+                </div>
+                <p className="text-muted-foreground">
+                  To mark an order as Refunded, please enter the refund method, amount, UTR/Transaction ID, and destination.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    setOpenStatusDialog(false);
+                    setOpenRefundModal(true);
+                  }}
+                  className="w-full bg-rose-600 hover:bg-rose-700 text-white gap-1.5 h-8 text-xs font-medium"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Open Refund Form
+                </Button>
+              </div>
+            )}
 
             {/* COD Payment Collection Selector (Required when marking COD orders as Delivered) */}
             {isOrderCOD(selectedOrder) && newStatus === "delivered" && (
@@ -766,6 +895,26 @@ const OrdersTable = ({
         </DialogContent>
       </Dialog>
 
+      {/* Order Refund Modal */}
+      <RefundModal
+        open={openRefundModal}
+        onOpenChange={setOpenRefundModal}
+        order={selectedOrder}
+        onSuccess={() => {
+          queryClient.invalidateQueries(["orders"]);
+        }}
+      />
+
+      {/* Refund Status Transition Modal */}
+      <RefundStatusModal
+        open={openRefundStatusModal}
+        onOpenChange={setOpenRefundStatusModal}
+        order={selectedOrder}
+        targetStatus={refundStatusTarget}
+        onSuccess={() => {
+          queryClient.invalidateQueries(["orders"]);
+        }}
+      />
     </>
   );
 };
