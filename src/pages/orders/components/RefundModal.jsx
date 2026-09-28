@@ -2,14 +2,10 @@ import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   RotateCcw,
-  QrCode,
-  CreditCard,
-  Building2,
-  AlertCircle,
   CheckCircle2,
   Clock,
+  XCircle,
   Sparkles,
-  Info,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -21,64 +17,42 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { refundOrder } from "../helpers/refundOrder";
-import { getRefundStatusBadgeClass, formatRefundStatus } from "../helpers/statusBadge";
+import { updateRefundStatus } from "../helpers/updateRefundStatus";
 import { cn } from "@/lib/utils";
 
-const INITIAL_STATUS_OPTIONS = [
-  {
-    id: "initiated",
-    label: "Initiate Refund ⏳",
-    description: "Mark as pending / in-progress for transfer",
-    icon: Clock,
-    activeColor: "border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-300 ring-2 ring-amber-500/20",
-    iconColor: "text-amber-600 dark:text-amber-400",
-  },
-  {
-    id: "processed",
-    label: "Mark as Processed ✅",
-    description: "Refund transferred & completed immediately",
-    icon: CheckCircle2,
-    activeColor: "border-emerald-500 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 ring-2 ring-emerald-500/20",
-    iconColor: "text-emerald-600 dark:text-emerald-400",
-  },
+const REFUND_STATUS_OPTIONS = [
+  { value: "initiated", label: "Initiated (Refund in progress ⏳)" },
+  { value: "processed", label: "Processed (Refund completed / credited ✅)" },
+  { value: "failed", label: "Failed (Refund failed ❌)" },
 ];
 
 const REFUND_MODES = [
-  {
-    id: "manual_upi",
-    label: "Owner UPI / Manual",
-    icon: QrCode,
-    description: "Manual UPI transfer by admin",
-  },
-  {
-    id: "razorpay",
-    label: "Razorpay Auto",
-    icon: CreditCard,
-    description: "Automatic gateway refund",
-  },
-  {
-    id: "bank_transfer",
-    label: "Bank Transfer",
-    icon: Building2,
-    description: "Direct NEFT / IMPS transfer",
-  },
+  { value: "UPI", label: "UPI" },
+  { value: "Bank Transfer", label: "Bank Transfer" },
+  { value: "Razorpay", label: "Razorpay" },
+  { value: "Cash", label: "Cash" },
 ];
 
 const QUICK_REASONS = [
-  "Return accepted by admin",
-  "Customer requested return / damaged item",
+  "Customer return accepted",
+  "Product returned & verified",
   "Customer cancelled before shipping",
-  "Product out of stock",
-  "Incorrect item delivered",
+  "Damaged item refund",
+  "Out of stock item refund",
 ];
 
-const RefundModal = ({ open, onOpenChange, order, onSuccess }) => {
+const RefundModal = ({ open, onOpenChange, order, onSuccess, initialStatus = "processed" }) => {
   const queryClient = useQueryClient();
 
   const isDecided = Boolean(
@@ -87,38 +61,16 @@ const RefundModal = ({ open, onOpenChange, order, onSuccess }) => {
     order?.status === "refunded"
   );
 
-  const maxRefundable = useMemo(() => {
-    if (!order) return 0;
-    return Number(order.finalTotalAmount || 0);
-  }, [order]);
-
-  const availableInitialOptions = useMemo(() => {
+  const availableStatusOptions = useMemo(() => {
     if (isDecided) {
-      return [
-        {
-          id: "processed",
-          label: "Mark as Processed ✅",
-          description: "Refund transferred & completed successfully",
-          icon: CheckCircle2,
-          activeColor: "border-emerald-500 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 ring-2 ring-emerald-500/20",
-          iconColor: "text-emerald-600 dark:text-emerald-400",
-        },
-        {
-          id: "failed",
-          label: "Mark as Failed ❌",
-          description: "Refund failed or was rejected",
-          icon: AlertCircle,
-          activeColor: "border-rose-500 bg-rose-50 text-rose-900 dark:bg-rose-950/40 dark:text-rose-300 ring-2 ring-rose-500/20",
-          iconColor: "text-rose-600 dark:text-rose-400",
-        },
-      ];
+      return REFUND_STATUS_OPTIONS.filter((opt) => opt.value !== "initiated");
     }
-    return INITIAL_STATUS_OPTIONS;
+    return REFUND_STATUS_OPTIONS;
   }, [isDecided]);
 
-  const [refundStatus, setRefundStatus] = useState("initiated");
+  const [refundStatus, setRefundStatus] = useState("processed");
   const [amount, setAmount] = useState("");
-  const [refundMode, setRefundMode] = useState("manual_upi");
+  const [refundMode, setRefundMode] = useState("UPI");
   const [refundTo, setRefundTo] = useState("");
   const [refundTransactionId, setRefundTransactionId] = useState("");
   const [reason, setReason] = useState("");
@@ -136,78 +88,53 @@ const RefundModal = ({ open, onOpenChange, order, onSuccess }) => {
     order?.guestInfo?.email ||
     order?.user?.email ||
     "";
-  const razorpayPaymentId =
-    order?.paymentId ||
-    order?.razorpayPaymentId ||
-    order?.razorpay_payment_id ||
-    order?.transactionId ||
-    "";
 
   useEffect(() => {
     if (open && order) {
-      const defaultAmt = maxRefundable > 0 ? maxRefundable : Number(order.finalTotalAmount || 0);
-      const initialMode = order.refundMode && order.refundMode !== "cash" ? order.refundMode : (order.paymentMode === "razorpay" ? "razorpay" : "manual_upi");
+      const defaultAmt = Number(order.refundAmount || order.finalTotalAmount || 0);
+      setAmount(defaultAmt > 0 ? String(defaultAmt) : "");
 
-      setRefundMode(initialMode);
-      setRefundStatus(
-        isDecided
-          ? "processed"
-          : initialMode === "razorpay"
-          ? "processed"
-          : order.refundStatus || "initiated"
-      );
-      setAmount(String(defaultAmt));
-
-      if (initialMode === "razorpay") {
-        setRefundTransactionId(order.refundTransactionId || razorpayPaymentId || "");
-        setRefundTo(order.refundTo || customerEmail || customerMobile || "Razorpay Auto Source");
+      if (isDecided) {
+        setRefundStatus(order.refundStatus === "failed" ? "failed" : "processed");
       } else {
-        setRefundTransactionId(order.refundTransactionId || order.utr_number || "");
-        setRefundTo(order.refundTo || customerMobile || customerEmail || "");
+        setRefundStatus(order.refundStatus || initialStatus || "processed");
       }
 
-      setReason(order.refundReason || order.reason || "Return accepted, refund processed");
+      // Format mode to standard UPI / Bank Transfer / Razorpay / Cash
+      const existingMode = order.refundMode || order.refundMethod;
+      if (existingMode) {
+        const norm = String(existingMode).toLowerCase();
+        if (norm.includes("upi")) setRefundMode("UPI");
+        else if (norm.includes("bank")) setRefundMode("Bank Transfer");
+        else if (norm.includes("razor")) setRefundMode("Razorpay");
+        else if (norm.includes("cash")) setRefundMode("Cash");
+        else setRefundMode("UPI");
+      } else if (order.paymentMode === "razorpay") {
+        setRefundMode("Razorpay");
+      } else {
+        setRefundMode("UPI");
+      }
+
+      setRefundTo(order.refundTo || customerMobile || customerEmail || "");
+      setRefundTransactionId(order.refundTransactionId || order.utr_number || (order.paymentMode === "razorpay" ? order.paymentId || "" : ""));
+      setReason(order.refundReason || order.reason || "Customer return accepted");
       setErrors({});
     }
-  }, [open, order, maxRefundable, customerMobile, customerEmail, razorpayPaymentId, isDecided]);
+  }, [open, order, isDecided, initialStatus, customerMobile, customerEmail]);
 
-  // Handle Mode Change dynamically
-  const handleModeChange = (modeId) => {
-    setRefundMode(modeId);
-    setErrors((prev) => ({ ...prev, refundTransactionId: undefined, refundTo: undefined }));
-
-    if (modeId === "razorpay") {
-      if (!isDecided) setRefundStatus("processed");
-      if (razorpayPaymentId && !refundTransactionId) {
-        setRefundTransactionId(razorpayPaymentId);
-      }
-      if (!refundTo) {
-        setRefundTo(customerEmail || customerMobile || "Razorpay Auto Source");
-      }
-    } else {
-      if (!isDecided && refundStatus === "processed" && !order?.refundStatus) {
-        setRefundStatus("initiated");
-      }
-      if (refundTransactionId === razorpayPaymentId) {
-        setRefundTransactionId(order?.utr_number || "");
-      }
-      if (refundTo === "Razorpay Auto Source") {
-        setRefundTo(customerMobile || customerEmail || "");
-      }
-    }
-  };
-
-  const { mutate: processRefundMutation, isLoading: isRefunding } = useMutation({
-    mutationFn: ({ orderId, payload }) => refundOrder({ orderId, payload }),
+  const { mutate: updateRefundMutation, isLoading: isSubmitting } = useMutation({
+    mutationFn: ({ orderId, payload }) => updateRefundStatus({ orderId, payload }),
     onSuccess: (res) => {
       if (res?.error || res?.response?.success === false) {
-        toast.error(res?.response?.data?.message || res?.message || "Failed to initiate refund.");
+        toast.error(res?.response?.data?.message || res?.message || "Failed to update refund.");
         return;
       }
       toast.success(
         res?.response?.data?.message ||
           (refundStatus === "processed"
             ? "Refund processed successfully! ✅"
+            : refundStatus === "failed"
+            ? "Refund marked as Failed ❌"
             : "Refund initiated successfully! ⏳")
       );
       queryClient.invalidateQueries(["orders"]);
@@ -216,7 +143,7 @@ const RefundModal = ({ open, onOpenChange, order, onSuccess }) => {
       onOpenChange(false);
     },
     onError: (err) => {
-      toast.error(err?.response?.data?.message || err?.message || "Failed to process refund.");
+      toast.error(err?.response?.data?.message || err?.message || "Failed to update refund.");
     },
   });
 
@@ -230,17 +157,6 @@ const RefundModal = ({ open, onOpenChange, order, onSuccess }) => {
       newErrors.amount = `Amount cannot exceed order total of ₹${Number(order.finalTotalAmount).toFixed(2)}`;
     }
 
-    if (refundMode === "razorpay") {
-      if (!refundTransactionId.trim()) {
-        newErrors.refundTransactionId = "Razorpay Payment ID (pay_...) is required for Razorpay refund.";
-      }
-    } else {
-      // Manual UPI or Bank Transfer
-      if (!refundTo.trim()) {
-        newErrors.refundTo = "Please specify customer destination (UPI ID, Phone, or Bank A/C).";
-      }
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -251,20 +167,18 @@ const RefundModal = ({ open, onOpenChange, order, onSuccess }) => {
       toast.error("A Processed or Failed refund cannot be reverted back to Initiated.");
       return;
     }
-    if (!validateForm()) {
-      return;
-    }
+    if (!validateForm()) return;
 
     const payload = {
-      amount: Number(amount) || 0,
-      refundMode,
-      refundTo: refundTo.trim() || (refundMode === "razorpay" ? "Razorpay Gateway" : undefined),
+      refundStatus, // 'initiated', 'processed', or 'failed'
+      refundAmount: Number(amount) || 0,
+      refundMode, // 'UPI', 'Bank Transfer', 'Razorpay', 'Cash'
       refundTransactionId: refundTransactionId.trim() || undefined,
-      reason: reason.trim() || undefined,
-      refundStatus: refundMode === "razorpay" ? "processed" : refundStatus,
+      refundTo: refundTo.trim() || undefined,
+      refundReason: reason.trim() || undefined,
     };
 
-    processRefundMutation({
+    updateRefundMutation({
       orderId: order._id,
       payload,
     });
@@ -278,7 +192,7 @@ const RefundModal = ({ open, onOpenChange, order, onSuccess }) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl max-h-[92vh] overflow-y-auto p-0 gap-0">
+      <DialogContent className="max-w-lg max-h-[92vh] overflow-y-auto p-0 gap-0">
         {/* Header */}
         <DialogHeader className="p-5 pb-4 border-b bg-muted/30">
           <div className="flex items-center justify-between">
@@ -287,161 +201,58 @@ const RefundModal = ({ open, onOpenChange, order, onSuccess }) => {
                 <RotateCcw className="h-4 w-4" />
               </div>
               <div>
-                <DialogTitle className="text-base font-bold">Initiate Order Refund</DialogTitle>
+                <DialogTitle className="text-base font-bold">Manage Order Refund</DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                  Order {orderNumberDisplay} • Customer: {order.address?.name || order.user?.name || "Customer"}
+                  Order {orderNumberDisplay} • Total: ₹{Number(order.finalTotalAmount || 0).toFixed(2)}
                 </DialogDescription>
               </div>
-            </div>
-            <div className="text-right">
-              <span className="text-[11px] font-medium text-muted-foreground block">Order Total</span>
-              <span className="text-sm font-bold text-foreground">
-                ₹{Number(order.finalTotalAmount || 0).toFixed(2)}
-              </span>
             </div>
           </div>
         </DialogHeader>
 
-        <form onSubmit={handleRefundSubmit} className="p-5 space-y-4">
-          {/* Order Info Strip */}
-          <div className="flex items-center justify-between p-2.5 rounded-lg border bg-muted/40 text-xs">
-            <div className="flex items-center gap-1.5 text-muted-foreground">
-              <AlertCircle className="h-3.5 w-3.5 text-primary" />
-              <span>Payment Mode: <strong className="text-foreground uppercase">{order.paymentMode || "COD"}</strong></span>
-            </div>
-            {Boolean(order.refundStatus || order.refundAmount > 0) && (
-              <Badge
-                variant="outline"
-                className={cn("text-[10px] px-2 py-0.5 font-medium border", getRefundStatusBadgeClass(order.refundStatus))}
-              >
-                {formatRefundStatus(order.refundStatus || "initiated")} (₹{Number(order.refundAmount || order.finalTotalAmount || 0).toFixed(2)})
-              </Badge>
-            )}
-          </div>
-
-          {/* FIELD 1: Refund Method / Mode (No Cash) */}
+        <form onSubmit={handleRefundSubmit} className="p-5 space-y-4 text-xs">
+          {/* 1. Refund Status Dropdown */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold text-foreground">
-              1. Select Refund Mode <span className="text-destructive">*</span>
+            <Label htmlFor="refund-status-select" className="text-xs font-semibold text-foreground">
+              1. Refund Status <span className="text-destructive">*</span>
             </Label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              {REFUND_MODES.map((mode) => {
-                const Icon = mode.icon;
-                const isSelected = refundMode === mode.id;
-                return (
-                  <button
-                    key={mode.id}
-                    type="button"
-                    onClick={() => handleModeChange(mode.id)}
-                    className={cn(
-                      "flex flex-col items-start p-2.5 rounded-lg border text-left transition-all cursor-pointer",
-                      isSelected
-                        ? "border-primary bg-primary/5 ring-2 ring-primary/20 text-foreground font-semibold"
-                        : "border-border hover:bg-muted/50 text-muted-foreground"
-                    )}
-                  >
-                    <div className="flex items-center gap-1.5 w-full mb-0.5">
-                      <Icon className={cn("h-4 w-4 shrink-0", isSelected ? "text-primary" : "text-muted-foreground")} />
-                      <span className="text-xs truncate font-medium">{mode.label}</span>
-                    </div>
-                    <span className="text-[10px] text-muted-foreground line-clamp-1">{mode.description}</span>
-                  </button>
-                );
-              })}
-            </div>
+            <Select value={refundStatus} onValueChange={setRefundStatus}>
+              <SelectTrigger id="refund-status-select" className="h-9 text-xs">
+                <SelectValue placeholder="Select Refund Status" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableStatusOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* FIELD 2: Status Selection (If Manual UPI / Bank Transfer) */}
-          {refundMode !== "razorpay" ? (
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-foreground">
-                2. Refund Status / State <span className="text-destructive">*</span>
-              </Label>
-              <div className={cn("grid gap-2.5", isDecided ? "grid-cols-1" : "grid-cols-2")}>
-                {availableInitialOptions.map((opt) => {
-                  const Icon = opt.icon;
-                  const isSelected = refundStatus === opt.id;
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => setRefundStatus(opt.id)}
-                      className={cn(
-                        "flex flex-col items-start p-3 rounded-lg border text-left transition-all cursor-pointer relative",
-                        isSelected
-                          ? opt.activeColor
-                          : "border-border hover:bg-muted/50 text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      <div className="flex items-center justify-between w-full mb-1">
-                        <div className="flex items-center gap-1.5 font-medium text-xs text-foreground">
-                          <Icon className={cn("h-4 w-4", isSelected ? opt.iconColor : "text-muted-foreground")} />
-                          <span>{opt.label}</span>
-                        </div>
-                        {isSelected && (
-                          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px]">
-                            ✓
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-muted-foreground line-clamp-2">
-                        {opt.description}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-start gap-2 p-2.5 rounded-lg border border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/40 dark:bg-emerald-950/20 text-xs text-emerald-800 dark:text-emerald-300">
-              <Info className="h-4 w-4 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-semibold">Razorpay Automatic Refund:</span>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  Refunds via Razorpay will be automatically credited to the customer's original payment method and marked as <strong>Refunded (Completed ✅)</strong>.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* FIELD 3: Refund Amount (₹) */}
+          {/* 2. Refund Amount Input */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label htmlFor="refund-amount" className="text-xs font-semibold text-foreground">
-                3. Refund Amount (₹) <span className="text-destructive">*</span>
+              <Label htmlFor="refund-amount-input" className="text-xs font-semibold text-foreground">
+                2. Refund Amount (₹) <span className="text-destructive">*</span>
               </Label>
-              <div className="flex items-center gap-1.5">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setAmount(String(Number(order.finalTotalAmount || 0)))}
-                  className="h-5 px-1.5 text-[11px] font-medium text-primary hover:bg-primary/10"
-                >
-                  <Sparkles className="h-3 w-3 mr-1" />
-                  Full (₹{Number(order.finalTotalAmount || 0).toFixed(2)})
-                </Button>
-                {order.finalTotalAmount && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() =>
-                      setAmount(String((Number(order.finalTotalAmount || 0) / 2).toFixed(2)))
-                    }
-                    className="h-5 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
-                  >
-                    50%
-                  </Button>
-                )}
-              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setAmount(String(Number(order.finalTotalAmount || 0)))}
+                className="h-5 px-1.5 text-[11px] font-medium text-primary hover:bg-primary/10"
+              >
+                <Sparkles className="h-3 w-3 mr-1" />
+                Full Order (₹{Number(order.finalTotalAmount || 0).toFixed(2)})
+              </Button>
             </div>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">
                 ₹
               </span>
               <Input
-                id="refund-amount"
+                id="refund-amount-input"
                 type="number"
                 step="0.01"
                 min="0"
@@ -450,9 +261,7 @@ const RefundModal = ({ open, onOpenChange, order, onSuccess }) => {
                 value={amount}
                 onChange={(e) => {
                   setAmount(e.target.value);
-                  if (errors.amount) {
-                    setErrors((prev) => ({ ...prev, amount: undefined }));
-                  }
+                  if (errors.amount) setErrors((prev) => ({ ...prev, amount: undefined }));
                 }}
                 className={cn("pl-7 text-sm font-semibold h-9", errors.amount && "border-destructive ring-destructive/20")}
               />
@@ -462,111 +271,93 @@ const RefundModal = ({ open, onOpenChange, order, onSuccess }) => {
             )}
           </div>
 
-          {/* DYNAMIC FIELD: Razorpay Payment ID vs Manual UPI / Bank Fields */}
-          {refundMode === "razorpay" ? (
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="razorpay-payment-id" className="text-xs font-semibold text-foreground">
-                  4. Razorpay Payment / Transaction ID (`pay_...`) <span className="text-destructive">*</span>
-                </Label>
-                <span className="text-[10px] text-muted-foreground">Required for Auto Refund</span>
-              </div>
-              <Input
-                id="razorpay-payment-id"
-                placeholder="e.g. pay_L7k2q0s9P8Wq9Z"
-                value={refundTransactionId}
-                onChange={(e) => {
-                  setRefundTransactionId(e.target.value);
-                  if (errors.refundTransactionId) {
-                    setErrors((prev) => ({ ...prev, refundTransactionId: undefined }));
-                  }
-                }}
-                className={cn("font-mono text-xs h-9", errors.refundTransactionId && "border-destructive ring-destructive/20")}
-              />
-              {errors.refundTransactionId && (
-                <p className="text-[11px] text-destructive font-medium">{errors.refundTransactionId}</p>
-              )}
-            </div>
-          ) : (
-            <>
-              {/* FIELD 4: Refund Destination / "Kis Par Bheja" */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="refund-destination" className="text-xs font-semibold text-foreground">
-                    4. Refund Destination ("Kis Par Bheja") <span className="text-destructive">*</span>
-                  </Label>
-                  <span className="text-[10px] text-muted-foreground">Customer UPI / Mobile / Bank</span>
-                </div>
-                <Input
-                  id="refund-destination"
-                  placeholder="e.g. user@okhdfcbank, 9876543210, or Bank A/C"
-                  value={refundTo}
-                  onChange={(e) => {
-                    setRefundTo(e.target.value);
-                    if (errors.refundTo) {
-                      setErrors((prev) => ({ ...prev, refundTo: undefined }));
-                    }
-                  }}
-                  className={cn("text-xs h-9", errors.refundTo && "border-destructive ring-destructive/20")}
-                />
-                {errors.refundTo && (
-                  <p className="text-[11px] text-destructive font-medium">{errors.refundTo}</p>
-                )}
-                {(customerMobile || customerEmail) && (
-                  <div className="flex items-center gap-1.5 pt-0.5 flex-wrap">
-                    <span className="text-[10px] text-muted-foreground">Quick insert:</span>
-                    {customerMobile && (
-                      <button
-                        type="button"
-                        onClick={() => setRefundTo(customerMobile)}
-                        className="text-[10px] font-mono bg-muted hover:bg-muted/80 px-1.5 py-0.5 rounded border text-foreground"
-                      >
-                        {customerMobile}
-                      </button>
-                    )}
-                    {customerEmail && (
-                      <button
-                        type="button"
-                        onClick={() => setRefundTo(customerEmail)}
-                        className="text-[10px] bg-muted hover:bg-muted/80 px-1.5 py-0.5 rounded border text-foreground truncate max-w-[160px]"
-                      >
-                        {customerEmail}
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
+          {/* 3. Refund Mode Dropdown */}
+          <div className="space-y-1.5">
+            <Label htmlFor="refund-mode-select" className="text-xs font-semibold text-foreground">
+              3. Refund Mode <span className="text-destructive">*</span>
+            </Label>
+            <Select value={refundMode} onValueChange={setRefundMode}>
+              <SelectTrigger id="refund-mode-select" className="h-9 text-xs">
+                <SelectValue placeholder="Select Refund Mode" />
+              </SelectTrigger>
+              <SelectContent>
+                {REFUND_MODES.map((mode) => (
+                  <SelectItem key={mode.value} value={mode.value} className="text-xs">
+                    {mode.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-              {/* FIELD 5: UTR / Transaction Reference */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="refund-utr" className="text-xs font-semibold text-foreground">
-                    5. Transaction / UTR Number
-                  </Label>
-                  <span className="text-[10px] text-muted-foreground">Optional at initiation (e.g. UTR482910492812)</span>
-                </div>
-                <Input
-                  id="refund-utr"
-                  placeholder="e.g. UTR482910492812"
-                  value={refundTransactionId}
-                  onChange={(e) => setRefundTransactionId(e.target.value)}
-                  className="font-mono text-xs uppercase h-9"
-                />
-              </div>
-            </>
-          )}
-
-          {/* FIELD 6: Reason / Admin Note */}
+          {/* 4. Transaction ID / UTR No. */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label htmlFor="refund-reason" className="text-xs font-semibold text-foreground">
-                {refundMode === "razorpay" ? "5. Reason / Notes" : "6. Reason / Notes"}
+              <Label htmlFor="refund-utr-input" className="text-xs font-semibold text-foreground">
+                4. Transaction ID / UTR No.
+              </Label>
+              <span className="text-[10px] text-muted-foreground">e.g. UTR123456789012</span>
+            </div>
+            <Input
+              id="refund-utr-input"
+              placeholder="e.g. 123456789012 / pay_..."
+              value={refundTransactionId}
+              onChange={(e) => setRefundTransactionId(e.target.value)}
+              className="font-mono text-xs uppercase h-9"
+            />
+          </div>
+
+          {/* 5. Refunded To */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="refund-to-input" className="text-xs font-semibold text-foreground">
+                5. Refunded To
+              </Label>
+              <span className="text-[10px] text-muted-foreground">UPI ID / Phone / Bank Acc</span>
+            </div>
+            <Input
+              id="refund-to-input"
+              placeholder="e.g. customer@okhdfcbank, 9876543210"
+              value={refundTo}
+              onChange={(e) => setRefundTo(e.target.value)}
+              className="text-xs h-9"
+            />
+            {(customerMobile || customerEmail) && (
+              <div className="flex items-center gap-1.5 pt-0.5 flex-wrap">
+                <span className="text-[10px] text-muted-foreground">Quick insert:</span>
+                {customerMobile && (
+                  <button
+                    type="button"
+                    onClick={() => setRefundTo(customerMobile)}
+                    className="text-[10px] font-mono bg-muted hover:bg-muted/80 px-1.5 py-0.5 rounded border text-foreground"
+                  >
+                    {customerMobile}
+                  </button>
+                )}
+                {customerEmail && (
+                  <button
+                    type="button"
+                    onClick={() => setRefundTo(customerEmail)}
+                    className="text-[10px] bg-muted hover:bg-muted/80 px-1.5 py-0.5 rounded border text-foreground truncate max-w-[160px]"
+                  >
+                    {customerEmail}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 6. Reason / Note */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="refund-reason-input" className="text-xs font-semibold text-foreground">
+                6. Reason / Note
               </Label>
               <span className="text-[10px] text-muted-foreground">Remarks</span>
             </div>
             <Textarea
-              id="refund-reason"
-              placeholder="e.g. Customer requested return / cancellation"
+              id="refund-reason-input"
+              placeholder="e.g. Customer return accepted"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               className="text-xs min-h-[60px] resize-y"
@@ -592,26 +383,30 @@ const RefundModal = ({ open, onOpenChange, order, onSuccess }) => {
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
-              disabled={isRefunding}
+              disabled={isSubmitting}
               className="h-9 text-xs"
             >
               Cancel
             </Button>
             <Button
               type="submit"
-              disabled={isRefunding}
+              disabled={isSubmitting}
               className={cn(
                 "gap-1.5 text-white font-semibold h-9 text-xs",
-                refundMode === "razorpay" || refundStatus === "processed"
+                refundStatus === "processed"
                   ? "bg-emerald-600 hover:bg-emerald-700"
+                  : refundStatus === "failed"
+                  ? "bg-rose-600 hover:bg-rose-700"
                   : "bg-amber-600 hover:bg-amber-700"
               )}
             >
-              <RotateCcw className={cn("h-3.5 w-3.5", isRefunding && "animate-spin")} />
-              {isRefunding
-                ? "Processing..."
-                : refundMode === "razorpay" || refundStatus === "processed"
-                ? `Confirm & Process Refund (₹${Number(amount || 0).toFixed(2)})`
+              <RotateCcw className={cn("h-3.5 w-3.5", isSubmitting && "animate-spin")} />
+              {isSubmitting
+                ? "Saving..."
+                : refundStatus === "processed"
+                ? `Confirm Refund (₹${Number(amount || 0).toFixed(2)}) ✅`
+                : refundStatus === "failed"
+                ? `Mark as Failed ❌`
                 : `Initiate Refund (₹${Number(amount || 0).toFixed(2)}) ⏳`}
             </Button>
           </DialogFooter>

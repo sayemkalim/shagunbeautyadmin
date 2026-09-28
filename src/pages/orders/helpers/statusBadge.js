@@ -1,14 +1,16 @@
 const STATUS_BADGE_CLASSES = {
-  delivered: "border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400",
-  sent: "border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400",
-  cancelled: "border-transparent bg-destructive/10 text-destructive",
-  failed: "border-transparent bg-destructive/10 text-destructive",
   pending: "border-transparent bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",
+  confirmed: "border-transparent bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400",
   processing: "border-transparent bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400",
   in_progress: "border-transparent bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400",
-  confirmed: "border-transparent bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400",
   shipped: "border-transparent bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-400",
-  out_for_delivery: "border-transparent bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
+  out_for_delivery: "border-transparent bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300",
+  delivered: "border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400",
+  sent: "border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400",
+  cancelled: "border-transparent bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400",
+  failed: "border-transparent bg-destructive/10 text-destructive",
+  return_requested: "border-transparent bg-orange-100 text-orange-800 dark:bg-orange-950/50 dark:text-orange-300",
+  returned: "border-transparent bg-teal-100 text-teal-800 dark:bg-teal-950/50 dark:text-teal-300",
   refund_initiated: "border-transparent bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300",
   refunded: "border-transparent bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300",
   refund_failed: "border-transparent bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300",
@@ -29,17 +31,19 @@ export const formatOrderStatus = (status) => {
     out_for_delivery: "Out for Delivery",
     delivered: "Delivered",
     cancelled: "Cancelled",
-    refund_initiated: "Refund Initiated ⏳",
-    refunded: "Refunded ✅",
-    refund_failed: "Refund Failed ❌",
+    return_requested: "Return Requested",
+    returned: "Returned",
+    refund_initiated: "Refund Initiated",
+    refunded: "Refunded",
+    refund_failed: "Refund Failed",
   };
   return labels[normalized] || status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 };
 
 export const REFUND_STATUSES = [
-  { value: "initiated", label: "Initiate Refund ⏳", description: "Will mark as pending / in-progress" },
-  { value: "processed", label: "Mark as Processed ✅", description: "Completed & transferred immediately" },
-  { value: "failed", label: "Mark as Failed ❌", description: "Refund failed or was rejected" },
+  { value: "initiated", label: "Initiated (In Progress ⏳)", description: "Refund in progress" },
+  { value: "processed", label: "Processed (Credited ✅)", description: "Refund completed successfully" },
+  { value: "failed", label: "Failed ❌", description: "Refund failed or was rejected" },
 ];
 
 export const getRefundStatusBadgeClass = (status) => {
@@ -67,14 +71,14 @@ export const getRefundStatusBadgeClass = (status) => {
 };
 
 export const formatRefundStatus = (status) => {
-  if (!status) return "Refund Initiated ⏳";
+  if (!status) return "Refund Initiated";
   const normalized = String(status).toLowerCase().trim();
   const map = {
-    processed: "Refund Completed ✅",
-    confirmed: "Refund Completed ✅",
+    processed: "Refund Processed ✅",
+    confirmed: "Refund Processed ✅",
     refunded: "Refunded ✅",
-    success: "Refund Completed ✅",
-    completed: "Refund Completed ✅",
+    success: "Refund Processed ✅",
+    completed: "Refund Processed ✅",
     initiated: "Refund Initiated ⏳",
     refund_initiated: "Refund Initiated ⏳",
     pending: "Refund Initiated ⏳",
@@ -87,22 +91,22 @@ export const formatRefundStatus = (status) => {
 };
 
 export const REFUND_MODES = [
-  { value: "manual_upi", label: "Owner UPI (Manual)", shortLabel: "UPI", description: "Refund sent directly via UPI QR / VPA" },
-  { value: "razorpay", label: "Razorpay (Automatic)", shortLabel: "Razorpay", description: "Automatic gateway refund via Razorpay" },
-  { value: "bank_transfer", label: "Bank Transfer", shortLabel: "Bank Transfer", description: "Direct NEFT / IMPS / RTGS to customer bank" },
+  { value: "UPI", label: "UPI", description: "Customer UPI / QR" },
+  { value: "Bank Transfer", label: "Bank Transfer", description: "Direct NEFT / IMPS" },
+  { value: "Razorpay", label: "Razorpay", description: "Razorpay Auto Gateway" },
+  { value: "Cash", label: "Cash", description: "Cash in hand" },
 ];
 
 export const formatRefundMode = (mode) => {
   if (!mode) return "N/A";
   const normalized = String(mode).toLowerCase().trim();
   const labels = {
-    manual_upi: "Owner UPI (Manual)",
-    upi: "Owner UPI (Manual)",
-    razorpay: "Razorpay (Auto)",
+    upi: "UPI",
+    manual_upi: "UPI",
     bank_transfer: "Bank Transfer",
+    razorpay: "Razorpay",
     cash: "Cash",
     other: "Other",
   };
-  return labels[normalized] || mode.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return labels[normalized] || mode;
 };
-

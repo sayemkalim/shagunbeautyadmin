@@ -57,6 +57,7 @@ import { fetchBundle } from "@/pages/bundles/helpers/fetchBundle";
 import { getStatusBadgeClass, formatOrderStatus, formatRefundMode, formatRefundStatus, getRefundStatusBadgeClass } from "../helpers/statusBadge";
 import { isOrderCOD } from "../helpers/isOrderCOD";
 import InlineRefundCard from "./InlineRefundCard";
+import RefundModal from "./RefundModal";
 import { ORDER_STATUS_VALUES } from "@/constant";
 import { cn } from "@/lib/utils";
 
@@ -88,6 +89,7 @@ const OrderDetails = () => {
   const [openStatusDialog, setOpenStatusDialog] = useState(false);
   const [newStatus, setNewStatus] = useState("");
   const [codPaymentMethod, setCodPaymentMethod] = useState("");
+  const [openRefundModal, setOpenRefundModal] = useState(false);
   
   // State for shipping cost editing
   const [isEditingShipping, setIsEditingShipping] = useState(false);
@@ -898,21 +900,16 @@ const OrderDetails = () => {
             Update Status
           </Button>
 
-          {/* Manage Refund Button (Shown only when order status is refunded) */}
-          {isRefunded && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const el = document.getElementById("order-refund-section");
-                if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-              }}
-              className="h-9 gap-1.5 text-xs font-medium border-rose-300 text-rose-700 hover:bg-rose-50 hover:text-rose-800 dark:border-rose-900/60 dark:text-rose-400 dark:hover:bg-rose-950/40"
-            >
-              <RotateCcw className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
-              Manage Refund
-            </Button>
-          )}
+          {/* Manage Refund Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setOpenRefundModal(true)}
+            className="h-9 gap-1.5 text-xs font-medium border-rose-300 text-rose-700 hover:bg-rose-50 hover:text-rose-800 dark:border-rose-900/60 dark:text-rose-400 dark:hover:bg-rose-950/40"
+          >
+            <RotateCcw className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+            Manage Refund
+          </Button>
 
           {/* Generate Payment Link Button */}
           <Button
@@ -1285,6 +1282,88 @@ const OrderDetails = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* 2. Simple Return Management Section */}
+      {Boolean(order.status === "return_requested" || order.returnReason || order.returnStatus || order.status === "returned") && (
+        <Card className="border-orange-200 dark:border-orange-900/50 bg-gradient-to-r from-orange-50/50 via-background to-orange-50/20 dark:from-orange-950/20 dark:via-background dark:to-orange-950/10 shadow-xs overflow-hidden">
+          <CardHeader className="py-3 px-5 border-b border-orange-100 dark:border-orange-900/30 bg-orange-100/30 dark:bg-orange-950/20">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-600 text-white shadow-xs">
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </div>
+                <div>
+                  <CardTitle className="text-sm font-bold text-orange-950 dark:text-orange-200">
+                    Return Request Details
+                  </CardTitle>
+                  <span className="text-[11px] text-muted-foreground">
+                    Customer return request information and stock management
+                  </span>
+                </div>
+              </div>
+              <Badge
+                variant="outline"
+                className={cn(
+                  "font-semibold text-xs px-2.5 py-0.5 border",
+                  order.status === "returned"
+                    ? "border-teal-300 text-teal-800 bg-teal-50 dark:bg-teal-950/40 dark:text-teal-300"
+                    : "border-orange-300 text-orange-800 bg-orange-50 dark:bg-orange-950/40 dark:text-orange-300"
+                )}
+              >
+                {order.status === "returned" ? "Returned ↩️" : "Return Requested 🔄"}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="p-4 px-5 space-y-3.5 text-xs">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-2.5 rounded-lg border bg-background/60">
+                <span className="text-muted-foreground block text-[11px] font-medium mb-1">Return Reason:</span>
+                <p className="font-semibold text-foreground text-xs leading-relaxed">
+                  {order.returnReason || "Customer requested return / refund"}
+                </p>
+              </div>
+              <div className="p-2.5 rounded-lg border bg-background/60">
+                <span className="text-muted-foreground block text-[11px] font-medium mb-1">Requested Date:</span>
+                <p className="font-medium text-foreground text-xs">
+                  {order.returnRequestedAt
+                    ? format(new Date(order.returnRequestedAt), "dd MMMM yyyy, hh:mm a")
+                    : order.updatedAt
+                    ? format(new Date(order.updatedAt), "dd MMMM yyyy, hh:mm a")
+                    : "N/A"}
+                </p>
+              </div>
+              <div className="p-2.5 rounded-lg border bg-background/60">
+                <span className="text-muted-foreground block text-[11px] font-medium mb-1">Return Status:</span>
+                <p className="font-semibold capitalize text-foreground text-xs">
+                  {order.returnStatus || (order.status === "returned" ? "Completed" : "Requested")}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-orange-100 dark:border-orange-900/30">
+              {order.status !== "returned" && (
+                <Button
+                  size="sm"
+                  onClick={() => updateOrderStatusMutation({ orderId: order._id, status: "returned" })}
+                  disabled={isUpdatingStatus}
+                  className="h-8 text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white gap-1.5 shadow-xs"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Mark as Returned
+                </Button>
+              )}
+              <Button
+                size="sm"
+                onClick={() => setOpenRefundModal(true)}
+                className="h-8 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white gap-1.5 shadow-xs"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Process Refund
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Embedded Inline Refund Management Section (Shown ONLY when order status is refunded) */}
       {isRefunded && (
@@ -2223,6 +2302,13 @@ const OrderDetails = () => {
           </div>
         </DialogContent>
       </Dialog>
+      {/* Refund Modal */}
+      <RefundModal
+        open={openRefundModal}
+        onOpenChange={setOpenRefundModal}
+        order={order}
+        onSuccess={refetchOrderData}
+      />
     </div>
   );
 };
