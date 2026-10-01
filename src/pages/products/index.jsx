@@ -7,6 +7,7 @@ import { DateRangePicker } from "@/components/date_filter";
 import ProductsTable from "./components/ProductsTable";
 import ExcelUploadDialog from "./components/ExcelUploadDialog";
 import ExportProductDialog from "./components/ExportProductDialog";
+import BrandDropdown from "./components/BrandDropdown";
 
 const Products = () => {
   const navigate = useNavigate();
@@ -14,6 +15,7 @@ const Products = () => {
   const [openBulkExportDialog, setOpenBulkExportDialog] = useState(false);
   const [productLength, setProductLength] = useState(0);
   const [searchText, setSearchText] = useState("");
+  const [selectedBrand, setSelectedBrand] = useState("all");
   const [params, setParams] = useState({
     page: 1,
     per_page: 50,
@@ -45,14 +47,24 @@ const Products = () => {
     }));
   };
 
+  const handleSelectBrand = (brandId) => {
+    setSelectedBrand(brandId);
+    setParams((prev) => ({
+      ...prev,
+      brand_id: brandId !== "all" ? brandId : undefined,
+      brand: brandId !== "all" ? brandId : undefined,
+      page: 1,
+      per_page: brandId !== "all" ? 1000 : 50,
+    }));
+  };
+
   const breadcrumbs = [{ title: "Products", isNavigation: true }];
-
-
 
   useEffect(() => {
     setParams((prev) => ({
       ...prev,
       search: debouncedSearch,
+      page: 1,
     }));
   }, [debouncedSearch]);
 
@@ -73,6 +85,12 @@ const Products = () => {
           searchText={searchText}
           handleSearch={handleSearch}
           searchPlaceholder="Search by product or brand name..."
+          extraFilters={
+            <BrandDropdown
+              selectedBrand={selectedBrand}
+              onSelectBrand={handleSelectBrand}
+            />
+          }
           setParams={setParams}
           // showDateRangePicker={true}
           // handleDateRangeChange={handleDateRangeChange}
@@ -86,6 +104,7 @@ const Products = () => {
           setProductLength={setProductLength}
           params={params}
           setParams={setParams}
+          selectedBrand={selectedBrand}
         />
         <ExcelUploadDialog
           openDialog={openDialog}

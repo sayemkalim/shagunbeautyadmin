@@ -28,6 +28,8 @@ const InventoryDetails = () => {
   // The list/get-by-sku API doesn't populate `product` on this endpoint —
   // carry the product summary through from whichever row the admin clicked.
   const product = location.state?.product;
+  const variant = location.state?.variant;
+  const passedInfo = location.state?.info;
 
   const [dialogState, setDialogState] = useState({ open: false, actionType: null });
 
@@ -39,6 +41,47 @@ const InventoryDetails = () => {
 
   const apiError = !isLoading && isApiError(apiResponse);
   const inventory = !apiError ? getApiData(apiResponse)?.inventory : null;
+
+  const isVariant = Boolean(inventory?.variant_sku || passedInfo?.isVariant);
+  const matchingVariant =
+    variant ||
+    passedInfo?.variant ||
+    (Array.isArray(product?.variants)
+      ? product.variants.find(
+          (v) =>
+            v.sku === inventory?.variant_sku ||
+            v.sku === sku ||
+            (isVariant && v.sku === inventory?.sku)
+        )
+      : null);
+
+  const displayImage =
+    (isVariant && (matchingVariant?.images?.[0] || matchingVariant?.image)) ||
+    product?.banner_image ||
+    product?.images?.[0] ||
+    passedInfo?.image ||
+    null;
+
+  const displayName = product?.name || passedInfo?.title || "Inventory Record";
+  const variantName = matchingVariant?.name || passedInfo?.variantTitle || inventory?.variant_sku;
+  const color = isVariant ? matchingVariant?.color : product?.color;
+  const colorName = isVariant ? matchingVariant?.color_name : product?.color_name;
+
+  const rawPrice =
+    (isVariant && (matchingVariant?.price?.$numberDecimal || matchingVariant?.price)) ||
+    product?.price?.$numberDecimal ||
+    product?.price ||
+    passedInfo?.price ||
+    null;
+
+  const rawDiscountedPrice =
+    (isVariant && (matchingVariant?.discounted_price?.$numberDecimal || matchingVariant?.discounted_price)) ||
+    product?.discounted_price?.$numberDecimal ||
+    product?.discounted_price ||
+    passedInfo?.discountedPrice ||
+    null;
+
+  const effectivePrice = rawDiscountedPrice || rawPrice;
 
   const openDialog = (actionType) => setDialogState({ open: true, actionType });
   const closeDialog = (open) => setDialogState((prev) => ({ ...prev, open }));
@@ -90,11 +133,11 @@ const InventoryDetails = () => {
         <Card>
           <CardContent className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
             <div className="flex items-start gap-4">
-              {product?.banner_image ? (
+              {displayImage ? (
                 <img
-                  src={product.banner_image}
-                  alt={product?.name}
-                  className="size-20 shrink-0 rounded-lg border object-cover"
+                  src={displayImage}
+                  alt={displayName}
+                  className="size-20 shrink-0 rounded-lg border object-contain p-1 bg-muted/20"
                 />
               ) : (
                 <div className="bg-muted flex size-20 shrink-0 items-center justify-center rounded-lg border">
@@ -103,18 +146,66 @@ const InventoryDetails = () => {
               )}
               <div className="space-y-1.5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Typography variant="h4">{product?.name || "Inventory Record"}</Typography>
+                  <Typography variant="h4">{displayName}</Typography>
                   <Badge className={cn("w-fit capitalize", getStockStatusBadgeClass(status))}>
                     {getStockStatusLabel(status)}
                   </Badge>
                 </div>
-                <Typography variant="p" className="text-muted-foreground font-mono text-sm">
-                  {inventory.sku}
-                </Typography>
-                {inventory.variant_sku && (
-                  <Badge variant="outline" className="w-fit font-mono text-xs">
-                    Variant: {inventory.variant_sku}
-                  </Badge>
+
+                {isVariant ? (
+                  <div className="flex items-center gap-2 text-sm flex-wrap">
+                    <Badge variant="secondary" className="font-normal text-xs">
+                      Variant: {variantName || inventory.variant_sku}
+                    </Badge>
+                    {(color || colorName) && (
+                      <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                        {color && (
+                          <span
+                            className="inline-block w-3 h-3 rounded-full border border-border shrink-0"
+                            style={{ backgroundColor: color }}
+                          />
+                        )}
+                        <span>{colorName || color}</span>
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Badge variant="outline" className="font-normal text-xs">
+                      Base Product
+                    </Badge>
+                    {(color || colorName) && (
+                      <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                        {color && (
+                          <span
+                            className="inline-block w-3 h-3 rounded-full border border-border shrink-0"
+                            style={{ backgroundColor: color }}
+                          />
+                        )}
+                        <span>{colorName || color}</span>
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 text-sm text-muted-foreground font-mono">
+                  <span>SKU: {inventory.variant_sku || inventory.sku}</span>
+                  {inventory.variant_sku && inventory.sku && inventory.variant_sku !== inventory.sku && (
+                    <span className="text-xs text-muted-foreground">
+                      (Base SKU: {inventory.sku})
+                    </span>
+                  )}
+                </div>
+
+                {effectivePrice && (
+                  <div className="flex items-center gap-2 pt-1 text-base font-semibold text-primary">
+                    <span>₹{effectivePrice}</span>
+                    {rawDiscountedPrice && rawPrice && rawDiscountedPrice !== rawPrice && (
+                      <span className="text-sm font-normal text-muted-foreground line-through">
+                        ₹{rawPrice}
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
             </div>

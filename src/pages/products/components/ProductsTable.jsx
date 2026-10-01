@@ -34,7 +34,7 @@ const getProductStatus = (row) => {
   return "hidden";
 };
 
-const ProductsTable = ({ setProductLength, params, setParams }) => {
+const ProductsTable = ({ setProductLength, params, setParams, selectedBrand = "all" }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const {
@@ -307,31 +307,55 @@ const ProductsTable = ({ setProductLength, params, setParams }) => {
   const searchLower = (params?.search || "").toLowerCase().trim();
 
   const products = useMemo(() => {
-    if (!searchLower) return rawProducts;
-    return rawProducts.filter((product) => {
-      const nameMatch = product.name?.toLowerCase().includes(searchLower);
-      const brandName =
-        typeof product.brand === "object"
-          ? product.brand?.name
-          : typeof product.brand === "string"
-          ? product.brand
-          : "";
-      const brandMatch = brandName?.toLowerCase().includes(searchLower);
-      const skuMatch = product.sku?.toLowerCase().includes(searchLower);
-      const colorMatch =
-        product.color_name?.toLowerCase().includes(searchLower) ||
-        product.color?.toLowerCase().includes(searchLower);
-      const variantMatch =
-        Array.isArray(product.variants) &&
-        product.variants.some(
-          (v) =>
-            v.name?.toLowerCase().includes(searchLower) ||
-            v.color_name?.toLowerCase().includes(searchLower) ||
-            v.sku?.toLowerCase().includes(searchLower)
+    let list = rawProducts;
+
+    // Filter by Brand if selected
+    if (selectedBrand && selectedBrand !== "all") {
+      list = list.filter((p) => {
+        const bId = typeof p.brand === "object" ? p.brand?._id : p.brand;
+        const bName = typeof p.brand === "object" ? p.brand?.name : p.brand;
+        return (
+          String(bId) === String(selectedBrand) ||
+          (typeof bName === "string" && bName.toLowerCase() === String(selectedBrand).toLowerCase())
         );
-      return nameMatch || brandMatch || skuMatch || colorMatch || variantMatch;
+      });
+    }
+
+    if (searchLower) {
+      list = list.filter((product) => {
+        const nameMatch = product.name?.toLowerCase().includes(searchLower);
+        const brandName =
+          typeof product.brand === "object"
+            ? product.brand?.name
+            : typeof product.brand === "string"
+            ? product.brand
+            : "";
+        const brandMatch = brandName?.toLowerCase().includes(searchLower);
+        const skuMatch = product.sku?.toLowerCase().includes(searchLower);
+        const colorMatch =
+          product.color_name?.toLowerCase().includes(searchLower) ||
+          product.color?.toLowerCase().includes(searchLower);
+        const variantMatch =
+          Array.isArray(product.variants) &&
+          product.variants.some(
+            (v) =>
+              v.name?.toLowerCase().includes(searchLower) ||
+              v.color_name?.toLowerCase().includes(searchLower) ||
+              v.sku?.toLowerCase().includes(searchLower)
+          );
+        return nameMatch || brandMatch || skuMatch || colorMatch || variantMatch;
+      });
+    }
+
+    // Sort by brand name first, then product name (Brand by Brand ordering)
+    return [...list].sort((a, b) => {
+      const brandA = (typeof a.brand === "object" ? a.brand?.name : a.brand) || "zzz";
+      const brandB = (typeof b.brand === "object" ? b.brand?.name : b.brand) || "zzz";
+      const brandCmp = brandA.localeCompare(brandB, undefined, { sensitivity: "base" });
+      if (brandCmp !== 0) return brandCmp;
+      return (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" });
     });
-  }, [rawProducts, searchLower]);
+  }, [rawProducts, selectedBrand, searchLower]);
 
   const onNavigateToEdit = (product) => {
     navigate(`/dashboard/product/edit/${product._id}`);
@@ -345,13 +369,24 @@ const ProductsTable = ({ setProductLength, params, setParams }) => {
     navigate(`/dashboard/products/inventory-history/${product._id}`);
   };
 
-  useEffect(() => {
-    setProductLength(products?.length);
-  }, [products, setProductLength]);
+  const displayTotal = useMemo(() => {
+    if (selectedBrand && selectedBrand !== "all") {
+      return products.length;
+    }
+    if (searchLower && !params?.search) {
+      return products.length;
+    }
+    return total || products.length;
+  }, [selectedBrand, searchLower, params?.search, total, products.length]);
 
-  const perPage = params.per_page;
-  const totalPages = Math.ceil(total / perPage);
-  const currentPage = params.page;
+  useEffect(() => {
+    setProductLength(displayTotal);
+  }, [displayTotal, setProductLength]);
+
+  const isBrandFiltered = selectedBrand && selectedBrand !== "all";
+  const perPage = isBrandFiltered ? Math.max(1, products.length) : (params.per_page || 50);
+  const totalPages = isBrandFiltered ? 1 : Math.max(1, Math.ceil((total || displayTotal) / perPage));
+  const currentPage = isBrandFiltered ? 1 : (params.page || 1);
 
   const columns = [
     {
@@ -359,9 +394,9 @@ const ProductsTable = ({ setProductLength, params, setParams }) => {
       label: "Name",
       render: (value, row) => {
         const brandName =
-          typeof row.brand === "object"
-            ? row.brand?.name
-            : typeof row.brand === "string"
+          typeof row.brand === "object" && row.brand?.name
+            ? row.brand.name
+            : typeof row.brand === "string" && !/^[0-9a-fA-F]{24}$/.test(row.brand.trim())
             ? row.brand
             : null;
         return (
@@ -393,7 +428,7 @@ const ProductsTable = ({ setProductLength, params, setParams }) => {
                 </div>
               )}
               {Array.isArray(row.variants) && row.variants.length > 0 && (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1 max-w-[22rem] overflow-x-auto whitespace-nowrap py-0.5">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1 max-w-[24rem] overflow-x-auto whitespace-nowrap py-0.5">
                   <span className="text-[11px] font-medium shrink-0">{row.variants.length} var:</span>
                   {row.variants.map((v, idx) => (
                     <span
@@ -852,6 +887,7 @@ const ProductsTable = ({ setProductLength, params, setParams }) => {
         totalPages={totalPages}
         currentPage={currentPage}
         perPage={perPage}
+        hidePagination={isBrandFiltered}
         onPageChange={onPageChange}
         enableRowSelection={true}
         selectedRows={selectedRows}

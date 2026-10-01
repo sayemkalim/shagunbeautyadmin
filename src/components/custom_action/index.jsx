@@ -37,6 +37,7 @@ const CustomActionMenu = ({
   onBulkExport,
   bulkExportLabel = "Bulk Export",
   filters,
+  extraFilters,
   searchPlaceholder = "Search",
 }) => {
   const hasFilters =
@@ -50,6 +51,7 @@ const CustomActionMenu = ({
         </Typography>
       </div>
       <div className="flex flex-wrap items-center gap-2 md:gap-3">
+        {extraFilters}
         {!disableSearch && (
           <Input
             placeholder={searchPlaceholder}
