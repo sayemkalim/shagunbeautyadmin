@@ -81,6 +81,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
     weight_in_grams: "",
     weight_unit: "g",
     color: "",
+    color_name: "",
     expiry_date: "",
     inventory: true,
     images: [],
@@ -101,6 +102,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
         discounted_price: "",
         inventory: 1,
         color: "",
+        color_name: "",
         weight_in_grams: "",
         weight_unit: "g",
         expiry_date: "",
@@ -191,6 +193,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
           discounted_price: "",
           inventory: 1,
           color: "",
+          color_name: "",
           weight_in_grams: "",
           weight_unit: "g",
           expiry_date: "",
@@ -413,6 +416,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
         weight_in_grams: parseWeightAndUnit(initialData.weight_in_grams, initialData.name || "").weight,
         weight_unit: parseWeightAndUnit(initialData.weight_in_grams, initialData.name || "").unit,
         color: initialData.color || "",
+        color_name: initialData.color_name || initialData.colorName || initialData.shade_name || initialData.shadeName || "",
         expiry_date: initialData.expiry_date ? initialData.expiry_date.split('T')[0] : "",
         inventory: Boolean(initialData.inventory),
         images: [],
@@ -481,6 +485,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
                       : 1
                     : 1,
                 color: v.color || "",
+                color_name: v.color_name || v.colorName || v.shade_name || v.shadeName || "",
                 weight_in_grams: parseWeightAndUnit(v.weight_in_grams, v.name || initialData.name || "").weight,
                 weight_unit: parseWeightAndUnit(v.weight_in_grams, v.name || initialData.name || "").unit,
                 expiry_date: v.expiry_date ? v.expiry_date.split('T')[0] : "",
@@ -504,6 +509,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
                 discounted_price: "",
                 inventory: 1,
                 color: "",
+                color_name: "",
                 weight_in_grams: "",
                 weight_unit: "g",
                 expiry_date: "",
@@ -680,7 +686,8 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
     form.append("weight_in_grams", formData.weight_in_grams);
     form.append("weight_unit", formData.weight_unit || "g");
     form.append("unit", formData.weight_unit || "g");
-    form.append("color", formData.color);
+    form.append("color", formData.color || "");
+    form.append("color_name", formData.color_name || "");
     if (formData.expiry_date) {
       form.append("expiry_date", formData.expiry_date);
     }
@@ -727,7 +734,7 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
 
     // ✅ Variants - only send if there are meaningful variants
     const validVariants = formData.variants.filter(variant => 
-      variant.sku.trim() || variant.name.trim() || variant.price || variant.discounted_price || (variant.images && variant.images.length > 0)
+      variant.sku.trim() || variant.name.trim() || variant.price || variant.discounted_price || (variant.images && variant.images.length > 0) || variant.color || (variant.color_name && variant.color_name.trim())
     );
     
     validVariants.forEach((variant, i) => {
@@ -741,7 +748,8 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
           ? 0
           : 1;
       form.append(`variants[${i}][inventory]`, variantInventory);
-      form.append(`variants[${i}][color]`, variant.color);
+      form.append(`variants[${i}][color]`, variant.color || "");
+      form.append(`variants[${i}][color_name]`, variant.color_name || "");
       form.append(`variants[${i}][weight_in_grams]`, variant.weight_in_grams);
       form.append(`variants[${i}][weight_unit]`, variant.weight_unit || "g");
       form.append(`variants[${i}][unit]`, variant.weight_unit || "g");
@@ -847,6 +855,68 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
           </div>
         </div>
 
+        {/* Brand */}
+        <div className="space-y-2">
+          <Label>Brand</Label>
+          <select
+            name="brand"
+            onChange={handleChange}
+            value={formData.brand}
+            className="border-input bg-background text-foreground focus-visible:ring-ring/50 w-full rounded-md border px-3 py-2 text-sm shadow-elegant-sm outline-none focus-visible:ring-[3px]"
+          >
+            <option value="">Select Brand</option>
+            {Array.isArray(apiBrandsResponse?.brands) &&
+              apiBrandsResponse.brands.map((brand) => (
+                <option key={brand._id} value={brand._id}>
+                  {brand.name}
+                </option>
+              ))}
+          </select>
+
+          {isBrandsLoading && (
+            <p className="text-muted-foreground text-sm">Loading brands...</p>
+          )}
+          {brandsError && (
+            <p className="text-destructive text-sm">Failed to load brands</p>
+          )}
+        </div>
+
+        {/* Name */}
+        <div className="space-y-2">
+          <Label>Name</Label>
+          <Input
+            type="text"
+            name="name"
+            value={formData.name}
+            onChange={handleChange}
+            placeholder="Product Name"
+          />
+        </div>
+
+        {/* Color and Color Name */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="color">Color (Hex Code)</Label>
+            <ColorPickerInput
+              id="color"
+              value={formData.color}
+              onChange={(value) => setFormData((prev) => ({ ...prev, color: value }))}
+              placeholder="#000000"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="color_name">Color Name / Shade Name</Label>
+            <Input
+              id="color_name"
+              type="text"
+              name="color_name"
+              value={formData.color_name}
+              onChange={handleChange}
+              placeholder="e.g., Ruby Red, Nude Pink"
+            />
+          </div>
+        </div>
+
         {/* Weight / Volume */}
         <div className="space-y-2">
           <Label>Weight / Volume</Label>
@@ -872,15 +942,6 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
           </div>
         </div>
 
-        {/* Color */}
-        <div className="space-y-2">
-          <Label>Color</Label>
-          <ColorPickerInput
-            value={formData.color}
-            onChange={(value) => setFormData((prev) => ({ ...prev, color: value }))}
-          />
-        </div>
-
         {/* Expiry Date */}
         <div className="space-y-2">
           <Label>Expiry Date</Label>
@@ -889,18 +950,6 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
             name="expiry_date"
             value={formData.expiry_date}
             onChange={handleChange}
-          />
-        </div>
-
-        {/* Name */}
-        <div className="space-y-2">
-          <Label>Name</Label>
-          <Input
-            type="text"
-            name="name"
-            value={formData.name}
-            onChange={handleChange}
-            placeholder="Product Name"
           />
         </div>
 
@@ -990,32 +1039,6 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
           )}
           {subcategoriesError && (
             <p className="text-destructive text-sm">Failed to load subcategories</p>
-          )}
-        </div>
-
-        {/* Brand */}
-        <div className="space-y-2">
-          <Label>Brand</Label>
-          <select
-            name="brand"
-            onChange={handleChange}
-            value={formData.brand}
-            className="border-input bg-background text-foreground focus-visible:ring-ring/50 w-full rounded-md border px-3 py-2 text-sm shadow-elegant-sm outline-none focus-visible:ring-[3px]"
-          >
-            <option value="">Select Brand</option>
-            {Array.isArray(apiBrandsResponse?.brands) &&
-              apiBrandsResponse.brands.map((brand) => (
-                <option key={brand._id} value={brand._id}>
-                  {brand.name}
-                </option>
-              ))}
-          </select>
-
-          {isBrandsLoading && (
-            <p className="text-muted-foreground text-sm">Loading brands...</p>
-          )}
-          {brandsError && (
-            <p className="text-destructive text-sm">Failed to load brands</p>
           )}
         </div>
         </div>
@@ -1191,6 +1214,12 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
                 </button>
               )}
 
+              <div className="flex items-center justify-between pb-2 border-b border-border/50">
+                <h5 className="font-semibold text-sm text-foreground truncate whitespace-nowrap pr-8">
+                  Variant #{index + 1}{variant.name ? ` — ${variant.name}` : ""}
+                </h5>
+              </div>
+
               <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                 <div className="flex flex-col">
                   <Label htmlFor={`sku-${index}`} className="mb-1">SKU</Label>
@@ -1276,11 +1305,25 @@ const AddProductCard = ({ initialData = {}, isEditMode = false }) => {
                 </div>
 
                 <div className="flex flex-col">
-                  <Label htmlFor={`color-${index}`} className="mb-1">Color</Label>
+                  <Label htmlFor={`color-${index}`} className="mb-1">Color (Hex Code)</Label>
                   <ColorPickerInput
                     id={`color-${index}`}
                     value={variant.color}
                     onChange={(value) => handleVariantChange(index, "color", value)}
+                    placeholder="#000000"
+                  />
+                </div>
+
+                <div className="flex flex-col">
+                  <Label htmlFor={`color_name-${index}`} className="mb-1">Color / Shade Name</Label>
+                  <Input
+                    id={`color_name-${index}`}
+                    type="text"
+                    value={variant.color_name || ""}
+                    onChange={(e) =>
+                      handleVariantChange(index, "color_name", e.target.value)
+                    }
+                    placeholder="e.g., Ruby Red, Nude Pink"
                   />
                 </div>
 

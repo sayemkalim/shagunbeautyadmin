@@ -177,8 +177,25 @@ const ProductDetails = () => {
       </Badge>
     ))}
   </div>
-)}           
- <div  />
+)}
+            {(product.color || product.color_name) && (
+              <Detail
+                label="Color / Shade"
+                value={
+                  <div className="flex items-center gap-1.5">
+                    {product.color && (
+                      <span
+                        className="inline-block h-4 w-4 rounded-full border border-border shrink-0 shadow-sm"
+                        style={{ backgroundColor: product.color }}
+                      />
+                    )}
+                    <span>
+                      {[product.color_name, product.color].filter(Boolean).join(" - ")}
+                    </span>
+                  </div>
+                }
+              />
+            )}
             {product.brand && (
               <Detail label="Brand" value={product.brand.name} />
             )}
@@ -253,8 +270,10 @@ const ProductDetails = () => {
           key={variant._id }
           className="bg-card shadow-elegant-sm rounded-lg border p-4"
         >
-          <div className="flex justify-between items-center mb-2">
-            <h4 className="font-medium">{variant.name}</h4>
+          <div className="flex justify-between items-center gap-3 mb-2">
+            <h4 className="font-semibold text-base truncate whitespace-nowrap flex-1" title={variant.name}>
+              {variant.name}
+            </h4>
             <Badge
               variant={
                 Number(variant.inventory) > 0 || variant.inventory === true
@@ -272,12 +291,25 @@ const ProductDetails = () => {
 
           <p className="text-sm text-muted-foreground mb-1">SKU: {variant.sku}</p>
 
-          {(variant.color || variant.weight_in_grams) && (
-            <p className="text-sm text-muted-foreground mb-1">
-              {variant.color && <>Color: {variant.color}</>}
-              {variant.color && variant.weight_in_grams ? " • " : ""}
+          {(variant.color || variant.color_name || variant.weight_in_grams) && (
+            <div className="text-sm text-muted-foreground mb-1 flex items-center gap-2 flex-wrap">
+              {(variant.color || variant.color_name) && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-foreground font-medium">Color:</span>
+                  {variant.color && (
+                    <span
+                      className="inline-block h-3.5 w-3.5 rounded-full border border-border shrink-0 shadow-sm"
+                      style={{ backgroundColor: variant.color }}
+                    />
+                  )}
+                  <span>
+                    {[variant.color_name, variant.color].filter(Boolean).join(" - ")}
+                  </span>
+                </div>
+              )}
+              {(variant.color || variant.color_name) && variant.weight_in_grams ? " • " : ""}
               {variant.weight_in_grams && (
-                <>
+                <span>
                   Weight/Volume: {variant.weight_in_grams}
                   {variant.weight_unit ||
                     variant.unit ||
@@ -286,9 +318,9 @@ const ProductDetails = () => {
                       : product.name && product.name.toLowerCase().includes("ml")
                       ? "ml"
                       : "g")}
-                </>
+                </span>
               )}
-            </p>
+            </div>
           )}
 
           <div className="flex items-center gap-2 text-base">
@@ -359,7 +391,7 @@ const ProductDetails = () => {
 const Detail = ({ label, value }) => (
   <div>
     <span className="text-foreground font-medium">{label}:</span>
-    <p className="text-muted-foreground">{value}</p>
+    <div className="text-muted-foreground">{value}</div>
   </div>
 );
 

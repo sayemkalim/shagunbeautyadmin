@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import CustomTable from "@/components/custom_table";
 import Typography from "@/components/typography";
 import { CustomDialog } from "@/components/custom_dialog";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router";
 import { fetchProducts } from "./helpers/fetchProducts";
@@ -301,8 +301,37 @@ const ProductsTable = ({ setProductLength, params, setParams }) => {
       setMigratingId(null);
     }
   };
-  const products = apiProductsResponse?.data || [];
+  const rawProducts = apiProductsResponse?.data || [];
   const total = apiProductsResponse?.total || 0;
+
+  const searchLower = (params?.search || "").toLowerCase().trim();
+
+  const products = useMemo(() => {
+    if (!searchLower) return rawProducts;
+    return rawProducts.filter((product) => {
+      const nameMatch = product.name?.toLowerCase().includes(searchLower);
+      const brandName =
+        typeof product.brand === "object"
+          ? product.brand?.name
+          : typeof product.brand === "string"
+          ? product.brand
+          : "";
+      const brandMatch = brandName?.toLowerCase().includes(searchLower);
+      const skuMatch = product.sku?.toLowerCase().includes(searchLower);
+      const colorMatch =
+        product.color_name?.toLowerCase().includes(searchLower) ||
+        product.color?.toLowerCase().includes(searchLower);
+      const variantMatch =
+        Array.isArray(product.variants) &&
+        product.variants.some(
+          (v) =>
+            v.name?.toLowerCase().includes(searchLower) ||
+            v.color_name?.toLowerCase().includes(searchLower) ||
+            v.sku?.toLowerCase().includes(searchLower)
+        );
+      return nameMatch || brandMatch || skuMatch || colorMatch || variantMatch;
+    });
+  }, [rawProducts, searchLower]);
 
   const onNavigateToEdit = (product) => {
     navigate(`/dashboard/product/edit/${product._id}`);
@@ -328,18 +357,65 @@ const ProductsTable = ({ setProductLength, params, setParams }) => {
     {
       key: "name",
       label: "Name",
-      render: (value, row) => (
-        <div className="flex items-center gap-3">
-          <img
-            src={row.banner_image || row.images?.[0]}
-            alt={value}
-            className="bg-muted border-border h-14 w-14 shrink-0 rounded-lg border object-contain p-1"
-          />
-          <Typography variant="p" className="w-[15rem] text-wrap font-medium">
-            {value}
-          </Typography>
-        </div>
-      ),
+      render: (value, row) => {
+        const brandName =
+          typeof row.brand === "object"
+            ? row.brand?.name
+            : typeof row.brand === "string"
+            ? row.brand
+            : null;
+        return (
+          <div className="flex items-center gap-3">
+            <img
+              src={row.banner_image || row.images?.[0]}
+              alt={value}
+              className="bg-muted border-border h-14 w-14 shrink-0 rounded-lg border object-contain p-1"
+            />
+            <div className="flex flex-col gap-0.5">
+              <Typography variant="p" className="w-[15rem] text-wrap font-medium">
+                {value}
+              </Typography>
+              {brandName && (
+                <div className="flex items-center gap-1 text-xs">
+                  <span className="text-muted-foreground font-medium">Brand:</span>
+                  <span className="text-foreground font-semibold">{brandName}</span>
+                </div>
+              )}
+              {(row.color || row.color_name) && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  {row.color && (
+                    <span
+                      className="inline-block h-3.5 w-3.5 rounded-full border border-border shrink-0 shadow-sm"
+                      style={{ backgroundColor: row.color }}
+                    />
+                  )}
+                  <span>{[row.color_name, row.color].filter(Boolean).join(" - ")}</span>
+                </div>
+              )}
+              {Array.isArray(row.variants) && row.variants.length > 0 && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1 max-w-[22rem] overflow-x-auto whitespace-nowrap py-0.5">
+                  <span className="text-[11px] font-medium shrink-0">{row.variants.length} var:</span>
+                  {row.variants.map((v, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center gap-1 rounded bg-muted/70 px-1.5 py-0.5 text-[11px] shrink-0 whitespace-nowrap"
+                      title={[v.name, v.color_name, v.color, v.sku].filter(Boolean).join(" | ")}
+                    >
+                      {v.color && (
+                        <span
+                          className="inline-block h-2.5 w-2.5 rounded-full border border-border shrink-0"
+                          style={{ backgroundColor: v.color }}
+                        />
+                      )}
+                      <span>{v.name || v.color_name || v.sku || `Var ${idx + 1}`}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      },
     },
     {
       key: "price",

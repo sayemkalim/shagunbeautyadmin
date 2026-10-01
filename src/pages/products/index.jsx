@@ -72,6 +72,7 @@ const Products = () => {
           disableBulkUpload={false}
           searchText={searchText}
           handleSearch={handleSearch}
+          searchPlaceholder="Search by product or brand name..."
           setParams={setParams}
           // showDateRangePicker={true}
           // handleDateRangeChange={handleDateRangeChange}

@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 
 const HEX_PATTERN = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
 
-const ColorPickerInput = ({ id, value, onChange, placeholder = "e.g. Golden Brown" }) => {
+const ColorPickerInput = ({ id, value, onChange, placeholder = "#000000" }) => {
   const isHex = HEX_PATTERN.test(value || "");
 
   return (
