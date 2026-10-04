@@ -70,9 +70,9 @@ const Router = () => {
           <Route path="/dashboard/products/:id" element={<ProductDetails />} />
 
           {/* {Bundles Route} */}
-          <Route path="/dashboard/bundles" element={<Bundles />} />
+          {/* <Route path="/dashboard/bundles" element={<Bundles />} />
           <Route path="/dashboard/bundles/add" element={<BundleEditor />} />
-          <Route path="/dashboard/bundle/edit/:id" element={<BundleEditor />} />
+          <Route path="/dashboard/bundle/edit/:id" element={<BundleEditor />} /> */}
 
           {/* Brands Route */}
           <Route path="/dashboard/brands" element={<Brand />} />

@@ -44,18 +44,18 @@ const CustomActionMenu = ({
     showDateRangePicker || showRowSelection || Boolean(filters) || !disableBulkExport;
 
   return (
-    <div className="my-3 flex w-full flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <div className="my-3 flex w-full flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
       <div>
-        <Typography variant="p" className="whitespace-nowrap">
-          Showing {total} {title}
+        <Typography variant="p" className="whitespace-nowrap font-medium text-muted-foreground">
+          Showing <span className="font-semibold text-foreground">{total}</span> {title}
         </Typography>
       </div>
-      <div className="flex flex-wrap items-center gap-2 md:gap-3">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
         {extraFilters}
         {!disableSearch && (
           <Input
             placeholder={searchPlaceholder}
-            className={`min-w-[150px] ${disableBulkUpload ? "w-80" : "w-48"}`}
+            className="w-44 sm:w-56 md:w-64 min-w-[160px]"
             value={searchText}
             onChange={handleSearch}
           />

@@ -102,14 +102,14 @@ export const data = {
       items: [],
       roles: ["super_admin", "admin"],
     },
-    {
-      title: "Bundles",
-      url: "/dashboard/bundles",
-      icon: LayoutGridIcon,
-      isActive: true,
-      items: [],
-      roles: ["super_admin", "admin"],
-    },
+    // {
+    //   title: "Bundles",
+    //   url: "/dashboard/bundles",
+    //   icon: LayoutGridIcon,
+    //   isActive: true,
+    //   items: [],
+    //   roles: ["super_admin", "admin"],
+    // },
     {
       title: "Brands",
       url: "/dashboard/brands",

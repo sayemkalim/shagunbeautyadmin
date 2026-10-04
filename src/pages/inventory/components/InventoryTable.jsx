@@ -23,17 +23,33 @@ import { getItem } from "@/utils/local_storage";
 import { fetchInventoryList } from "../helpers/fetchInventoryList";
 import { getApiData, isApiError } from "../helpers/apiResult";
 import { getStockStatus, getStockStatusLabel, getStockStatusBadgeClass } from "../helpers/stockStatus";
+import { formatWeight } from "../helpers/formatWeight";
 import InventoryActionDialog from "./InventoryActionDialog";
 
-const getInventoryProductInfo = (row) => {
-  const isVariant = Boolean(row.variant_sku && row.variant_sku !== row.sku);
+export { formatWeight };
+
+export const getInventoryProductInfo = (row) => {
   const matchingVariant =
     row.variant ||
     (Array.isArray(row.product?.variants)
       ? row.product.variants.find(
-          (v) => v.sku === row.variant_sku || (isVariant && v.sku === row.sku)
+          (v) =>
+            (row.sku && v.sku === row.sku) ||
+            (row.variant_sku && v.sku === row.variant_sku) ||
+            (row.variant_id && String(v._id) === String(row.variant_id)) ||
+            (row.variantId && String(v._id) === String(row.variantId))
         )
       : null);
+
+  const isVariant = Boolean(
+    matchingVariant ||
+      row.is_variant ||
+      row.isVariant ||
+      row.variant_id ||
+      row.variantId ||
+      (row.variant_sku && row.variant_sku !== row.product?.sku) ||
+      (row.product?.sku && row.sku && row.sku !== row.product?.sku)
+  );
 
   const image =
     (isVariant && (matchingVariant?.images?.[0] || matchingVariant?.image)) ||
@@ -43,10 +59,38 @@ const getInventoryProductInfo = (row) => {
     row.banner_image ||
     null;
 
-  const title = row.product?.name || row.name || "Unknown Product";
-  const variantTitle = matchingVariant?.name || (isVariant ? row.variant_sku : null);
-  const color = isVariant ? matchingVariant?.color : row.product?.color;
-  const colorName = isVariant ? matchingVariant?.color_name : row.product?.color_name;
+  const baseTitle = row.product?.name || row.name || "Unknown Product";
+  const title = baseTitle;
+
+  const baseRawWeight =
+    row.product?.weight_in_grams ??
+    row.product?.weight ??
+    (!isVariant ? (row.weight_in_grams ?? row.weight) : null);
+  const baseWeightUnit =
+    row.product?.weight_unit || row.product?.unit || row.weight_unit || row.unit || "g";
+  const baseWeight = formatWeight(baseRawWeight, baseWeightUnit);
+
+  const variantTitle =
+    matchingVariant?.name ||
+    row.variant_name ||
+    row.variantName ||
+    (isVariant ? row.variant_sku || row.sku : null);
+
+  const variantRawWeight =
+    matchingVariant?.weight_in_grams ??
+    matchingVariant?.weight ??
+    row.variant_weight_in_grams ??
+    (isVariant ? (row.weight_in_grams ?? row.weight) : null);
+  const variantWeightUnit =
+    matchingVariant?.weight_unit ||
+    matchingVariant?.unit ||
+    row.variant_weight_unit ||
+    row.weight_unit ||
+    "g";
+  const variantWeight = formatWeight(variantRawWeight, variantWeightUnit);
+
+  const color = isVariant ? matchingVariant?.color : (row.product?.color || row.color);
+  const colorName = isVariant ? matchingVariant?.color_name : (row.product?.color_name || row.color_name);
 
   const rawPrice =
     (isVariant && (matchingVariant?.price?.$numberDecimal || matchingVariant?.price)) ||
@@ -65,15 +109,18 @@ const getInventoryProductInfo = (row) => {
   const price = rawPrice ? String(rawPrice) : null;
   const discountedPrice = rawDiscountedPrice ? String(rawDiscountedPrice) : null;
 
-  const activeSku = isVariant ? row.variant_sku || row.sku : row.sku || row.product?.sku;
-  const baseSku = row.product?.sku || (isVariant ? row.sku : null);
+  const activeSku = isVariant ? row.sku || row.variant_sku || matchingVariant?.sku : row.sku || row.product?.sku;
+  const baseSku = row.product?.sku || (isVariant && row.sku !== row.product?.sku ? row.product?.sku : null);
 
   return {
     isVariant,
     variant: matchingVariant,
     image,
     title,
+    baseTitle,
+    baseWeight,
     variantTitle,
+    variantWeight,
     color,
     colorName,
     price,
@@ -115,12 +162,15 @@ const InventoryTable = ({ params, setParams, onOpenSync, setTotal }) => {
       label: "Product",
       render: (_, row) => {
         const info = getInventoryProductInfo(row);
+        const displayName = info.isVariant ? (info.variantTitle || info.baseTitle) : info.baseTitle;
+        const displayWeight = info.isVariant ? info.variantWeight : info.baseWeight;
+
         return (
           <div className="flex items-center gap-3">
             {info.image ? (
               <img
                 src={info.image}
-                alt={info.title}
+                alt={displayName}
                 className="size-12 shrink-0 rounded-lg border object-contain p-0.5 bg-muted/20"
               />
             ) : (
@@ -128,49 +178,87 @@ const InventoryTable = ({ params, setParams, onOpenSync, setTotal }) => {
                 <ImageOff className="text-muted-foreground size-5" />
               </div>
             )}
-            <div className="flex flex-col gap-0.5 max-w-[240px]">
-              <Typography variant="p" className="truncate font-medium text-foreground" title={info.title}>
-                {info.title}
-              </Typography>
+            <div className="flex flex-col gap-1 max-w-[320px]">
               {info.isVariant ? (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
-                  <Badge variant="secondary" className="px-1.5 py-0 text-[10px] font-medium shrink-0">
-                    Variant
-                  </Badge>
-                  {info.variantTitle && (
-                    <span className="truncate max-w-[140px] text-foreground font-medium" title={info.variantTitle}>
-                      {info.variantTitle}
+                <>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Typography
+                      variant="p"
+                      className="font-semibold text-foreground text-sm line-clamp-1"
+                      title={displayName}
+                    >
+                      {displayName}
+                    </Typography>
+                    {displayWeight && (
+                      <span
+                        className="inline-flex items-center rounded bg-purple-100/80 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800/80 px-1.5 py-0.5 text-[11px] font-medium"
+                        title={`Variant Weight: ${displayWeight}`}
+                      >
+                        {displayWeight}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs flex-wrap">
+                    <span className="inline-flex items-center gap-1 rounded bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/25 px-1.5 py-0.5 text-[11px] font-semibold">
+                      Variant
                     </span>
-                  )}
-                  {(info.color || info.colorName) && (
-                    <span className="inline-flex items-center gap-1 text-[11px]">
-                      {info.color && (
-                        <span
-                          className="inline-block w-2.5 h-2.5 rounded-full border border-border shrink-0"
-                          style={{ backgroundColor: info.color }}
-                        />
-                      )}
-                      <span>{info.colorName || info.color}</span>
-                    </span>
-                  )}
-                </div>
+                    {info.baseTitle && info.baseTitle !== displayName && (
+                      <span
+                        className="text-[11px] text-muted-foreground truncate max-w-[170px]"
+                        title={`Base Product: ${info.baseTitle}`}
+                      >
+                        Base: {info.baseTitle}
+                      </span>
+                    )}
+                    {(info.color || info.colorName) && (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                        {info.color && (
+                          <span
+                            className="inline-block w-3 h-3 rounded-full border border-border shrink-0 shadow-2xs"
+                            style={{ backgroundColor: info.color }}
+                          />
+                        )}
+                        <span>{[info.colorName, info.color].filter(Boolean).join(" - ")}</span>
+                      </span>
+                    )}
+                  </div>
+                </>
               ) : (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Badge variant="outline" className="px-1.5 py-0 text-[10px] font-normal shrink-0">
-                    Base Product
-                  </Badge>
-                  {(info.color || info.colorName) && (
-                    <span className="inline-flex items-center gap-1 text-[11px]">
-                      {info.color && (
-                        <span
-                          className="inline-block w-2.5 h-2.5 rounded-full border border-border shrink-0"
-                          style={{ backgroundColor: info.color }}
-                        />
-                      )}
-                      <span>{info.colorName || info.color}</span>
+                <>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Typography
+                      variant="p"
+                      className="font-semibold text-foreground text-sm line-clamp-1"
+                      title={displayName}
+                    >
+                      {displayName}
+                    </Typography>
+                    {displayWeight && (
+                      <span
+                        className="inline-flex items-center rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 text-[11px] font-medium"
+                        title={`Weight: ${displayWeight}`}
+                      >
+                        {displayWeight}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs flex-wrap">
+                    <span className="inline-flex items-center rounded bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/25 px-1.5 py-0.5 text-[11px] font-medium">
+                      Base Product
                     </span>
-                  )}
-                </div>
+                    {(info.color || info.colorName) && (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                        {info.color && (
+                          <span
+                            className="inline-block w-3 h-3 rounded-full border border-border shrink-0 shadow-2xs"
+                            style={{ backgroundColor: info.color }}
+                          />
+                        )}
+                        <span>{[info.colorName, info.color].filter(Boolean).join(" - ")}</span>
+                      </span>
+                    )}
+                  </div>
+                </>
               )}
             </div>
           </div>
@@ -190,29 +278,6 @@ const InventoryTable = ({ params, setParams, onOpenSync, setTotal }) => {
             {info.isVariant && info.baseSku && info.baseSku !== info.activeSku && (
               <span className="font-mono text-[10px] text-muted-foreground">
                 Base: {info.baseSku}
-              </span>
-            )}
-          </div>
-        );
-      },
-    },
-    {
-      key: "price",
-      label: "Price",
-      render: (_, row) => {
-        const info = getInventoryProductInfo(row);
-        const effectivePrice = info.discountedPrice || info.price;
-        if (!effectivePrice) {
-          return <span className="text-muted-foreground text-xs">—</span>;
-        }
-        return (
-          <div className="flex flex-col gap-0.5">
-            <span className="font-semibold text-sm text-foreground">
-              ₹{effectivePrice}
-            </span>
-            {info.discountedPrice && info.price && info.discountedPrice !== info.price && (
-              <span className="text-muted-foreground text-[11px] line-through">
-                ₹{info.price}
               </span>
             )}
           </div>

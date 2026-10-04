@@ -13,6 +13,7 @@ import { useNavigate } from "react-router";
 import { fetchProducts } from "./helpers/fetchProducts";
 import { deleteProduct } from "./helpers/deleteProduct";
 import { migrateProductImages } from "./helpers/migrateProductImages";
+import { fetchBrand } from "@/pages/brands/helpers/fetchBrand";
 import { apiService } from "@/api/api_service/apiService";
 import { endpoints } from "@/api/endpoints";
 
@@ -45,6 +46,37 @@ const ProductsTable = ({ setProductLength, params, setParams, selectedBrand = "a
     queryKey: ["products", params],
     queryFn: () => fetchProducts({ params }),
   });
+
+  const { data: apiBrandsData } = useQuery({
+    queryKey: ["brands-filter-list"],
+    queryFn: () => fetchBrand({ params: {} }),
+    select: (data) => data?.response?.data || data?.data || data,
+  });
+
+  const brandsList = Array.isArray(apiBrandsData?.brands)
+    ? apiBrandsData.brands
+    : Array.isArray(apiBrandsData)
+    ? apiBrandsData
+    : [];
+
+  const brandMap = useMemo(() => {
+    const map = new Map();
+    brandsList.forEach((b) => {
+      if (b._id) map.set(String(b._id), b.name);
+      if (b.name) map.set(b.name.toLowerCase(), b.name);
+    });
+    return map;
+  }, [brandsList]);
+
+  const getRowBrandName = (brandField) => {
+    if (!brandField) return null;
+    if (typeof brandField === "object" && brandField.name) return brandField.name;
+    const str = String(brandField).trim();
+    if (brandMap.has(str)) return brandMap.get(str);
+    if (brandMap.has(str.toLowerCase())) return brandMap.get(str.toLowerCase());
+    if (!/^[0-9a-fA-F]{24}$/.test(str)) return str;
+    return null;
+  };
 
   const [openDelete, setOpenDelete] = useState(false);
   const [productData, setProductData] = useState(null);
@@ -393,12 +425,7 @@ const ProductsTable = ({ setProductLength, params, setParams, selectedBrand = "a
       key: "name",
       label: "Name",
       render: (value, row) => {
-        const brandName =
-          typeof row.brand === "object" && row.brand?.name
-            ? row.brand.name
-            : typeof row.brand === "string" && !/^[0-9a-fA-F]{24}$/.test(row.brand.trim())
-            ? row.brand
-            : null;
+        const brandName = getRowBrandName(row.brand);
         return (
           <div className="flex items-center gap-3">
             <img
@@ -406,14 +433,15 @@ const ProductsTable = ({ setProductLength, params, setParams, selectedBrand = "a
               alt={value}
               className="bg-muted border-border h-14 w-14 shrink-0 rounded-lg border object-contain p-1"
             />
-            <div className="flex flex-col gap-0.5">
-              <Typography variant="p" className="w-[15rem] text-wrap font-medium">
+            <div className="flex flex-col gap-0.5 max-w-[18rem] sm:max-w-[22rem]">
+              <Typography variant="p" className="text-wrap font-medium text-foreground text-sm line-clamp-2" title={value}>
                 {value}
               </Typography>
               {brandName && (
-                <div className="flex items-center gap-1 text-xs">
-                  <span className="text-muted-foreground font-medium">Brand:</span>
-                  <span className="text-foreground font-semibold">{brandName}</span>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                    {brandName}
+                  </span>
                 </div>
               )}
               {(row.color || row.color_name) && (
@@ -600,11 +628,32 @@ const ProductsTable = ({ setProductLength, params, setParams, selectedBrand = "a
               variant="outline"
               className="ml-1"
               onClick={openPriceModal}
-              disabled={bulkUpdateMutation.isPending}
+              disabled={bulkUpdateMutation.isPending || bulkMigrating}
             >
               <IndianRupee className="mr-1 size-4" />
               Modify Prices
             </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleBulkMigrate}
+              disabled={bulkMigrating || selectedRows.length === 0 || selectedRows.length > 10}
+              className="gap-1.5"
+            >
+              {bulkMigrating ? <Loader2 className="size-3.5 animate-spin" /> : null}
+              Migrate Images {selectedRows.length > 10 && "(max 10)"}
+            </Button>
+            {bulkMigrating && (
+              <div className="flex w-36 items-center gap-2">
+                <div className="bg-muted h-2 w-full overflow-hidden rounded-full">
+                  <div
+                    className="bg-primary h-2 rounded-full transition-all"
+                    style={{ width: `${(bulkProgress / selectedRows.length) * 100}%` }}
+                  />
+                </div>
+                <span className="text-muted-foreground text-xs">{bulkProgress}/{selectedRows.length}</span>
+              </div>
+            )}
             <button
               onClick={() => setSelectedRows([])}
               className="text-muted-foreground hover:text-foreground ml-2 transition-colors"
@@ -848,37 +897,6 @@ const ProductsTable = ({ setProductLength, params, setParams, selectedBrand = "a
           </div>
         </div>
       )}
-
-      <div className="mb-4 flex items-center gap-4">
-        <Button
-          className="gap-2"
-          disabled={
-            bulkMigrating ||
-            selectedRows.length === 0 ||
-            selectedRows.length > 10
-          }
-          onClick={handleBulkMigrate}
-        >
-          Bulk Migrate
-          {bulkMigrating && (
-            <Loader2 className="size-4 animate-spin" />
-          )}
-        </Button>
-        {selectedRows.length > 10 && (
-          <span className="text-destructive text-sm">You can only migrate up to 10 products at once.</span>
-        )}
-        {bulkMigrating && (
-          <div className="flex w-48 items-center gap-2">
-            <div className="bg-muted h-2 w-full overflow-hidden rounded-full">
-              <div
-                className="bg-primary h-2 rounded-full transition-all"
-                style={{ width: `${(bulkProgress / selectedRows.length) * 100}%` }}
-              />
-            </div>
-            <span className="text-muted-foreground text-xs">{bulkProgress}/{selectedRows.length}</span>
-          </div>
-        )}
-      </div>
       <CustomTable
         columns={columns}
         data={products || []}

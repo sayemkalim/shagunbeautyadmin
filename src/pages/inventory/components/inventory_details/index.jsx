@@ -15,6 +15,7 @@ import { getItem } from "@/utils/local_storage";
 import { fetchInventoryBySku } from "../../helpers/fetchInventoryBySku";
 import { getApiData, getApiErrorMessage, isApiError } from "../../helpers/apiResult";
 import { getStockStatus, getStockStatusLabel, getStockStatusBadgeClass } from "../../helpers/stockStatus";
+import { formatWeight } from "../../helpers/formatWeight";
 import InventoryActionDialog from "../InventoryActionDialog";
 import MovementsTable from "../MovementsTable";
 
@@ -42,18 +43,29 @@ const InventoryDetails = () => {
   const apiError = !isLoading && isApiError(apiResponse);
   const inventory = !apiError ? getApiData(apiResponse)?.inventory : null;
 
-  const isVariant = Boolean(inventory?.variant_sku || passedInfo?.isVariant);
   const matchingVariant =
     variant ||
     passedInfo?.variant ||
     (Array.isArray(product?.variants)
       ? product.variants.find(
           (v) =>
-            v.sku === inventory?.variant_sku ||
             v.sku === sku ||
-            (isVariant && v.sku === inventory?.sku)
+            (inventory?.sku && v.sku === inventory.sku) ||
+            (inventory?.variant_sku && v.sku === inventory.variant_sku) ||
+            (inventory?.variant_id && String(v._id) === String(inventory.variant_id)) ||
+            (inventory?.variantId && String(v._id) === String(inventory.variantId))
         )
       : null);
+
+  const isVariant = Boolean(
+    matchingVariant ||
+      passedInfo?.isVariant ||
+      inventory?.is_variant ||
+      inventory?.isVariant ||
+      inventory?.variant_id ||
+      inventory?.variant_sku ||
+      (product?.sku && sku && sku !== product.sku)
+  );
 
   const displayImage =
     (isVariant && (matchingVariant?.images?.[0] || matchingVariant?.image)) ||
@@ -62,8 +74,30 @@ const InventoryDetails = () => {
     passedInfo?.image ||
     null;
 
-  const displayName = product?.name || passedInfo?.title || "Inventory Record";
-  const variantName = matchingVariant?.name || passedInfo?.variantTitle || inventory?.variant_sku;
+  const baseProductName = product?.name || passedInfo?.baseTitle || (!isVariant ? passedInfo?.title : null) || inventory?.product_name || "Base Product";
+  const variantName = matchingVariant?.name || passedInfo?.variantTitle || inventory?.variant_name || inventory?.variant_sku;
+
+  const currentDisplayName = isVariant ? (variantName || passedInfo?.variantTitle || baseProductName) : baseProductName;
+
+  const baseRawWeight =
+    product?.weight_in_grams ??
+    product?.weight ??
+    (!isVariant ? passedInfo?.baseWeight : null) ??
+    (!isVariant ? (inventory?.weight_in_grams ?? inventory?.weight) : null);
+  const baseWeightUnit = product?.weight_unit || product?.unit || inventory?.weight_unit || "g";
+  const baseWeight = typeof passedInfo?.baseWeight === "string" ? passedInfo.baseWeight : formatWeight(baseRawWeight, baseWeightUnit);
+
+  const variantRawWeight =
+    matchingVariant?.weight_in_grams ??
+    matchingVariant?.weight ??
+    passedInfo?.variantWeight ??
+    inventory?.variant_weight_in_grams ??
+    (isVariant ? (inventory?.weight_in_grams ?? inventory?.weight) : null);
+  const variantWeightUnit = matchingVariant?.weight_unit || matchingVariant?.unit || inventory?.variant_weight_unit || inventory?.weight_unit || "g";
+  const variantWeight = typeof passedInfo?.variantWeight === "string" ? passedInfo.variantWeight : formatWeight(variantRawWeight, variantWeightUnit);
+
+  const currentWeight = isVariant ? variantWeight : baseWeight;
+
   const color = isVariant ? matchingVariant?.color : product?.color;
   const colorName = isVariant ? matchingVariant?.color_name : product?.color_name;
 
@@ -131,12 +165,12 @@ const InventoryDetails = () => {
         </Button>
 
         <Card>
-          <CardContent className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+          <CardContent className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between p-6">
             <div className="flex items-start gap-4">
               {displayImage ? (
                 <img
                   src={displayImage}
-                  alt={displayName}
+                  alt={currentDisplayName}
                   className="size-20 shrink-0 rounded-lg border object-contain p-1 bg-muted/20"
                 />
               ) : (
@@ -144,36 +178,57 @@ const InventoryDetails = () => {
                   <ImageOff className="text-muted-foreground size-6" />
                 </div>
               )}
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Typography variant="h4">{displayName}</Typography>
+                  <Typography variant="h4">{currentDisplayName}</Typography>
                   <Badge className={cn("w-fit capitalize", getStockStatusBadgeClass(status))}>
                     {getStockStatusLabel(status)}
                   </Badge>
                 </div>
 
                 {isVariant ? (
-                  <div className="flex items-center gap-2 text-sm flex-wrap">
-                    <Badge variant="secondary" className="font-normal text-xs">
-                      Variant: {variantName || inventory.variant_sku}
-                    </Badge>
-                    {(color || colorName) && (
-                      <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                        {color && (
-                          <span
-                            className="inline-block w-3 h-3 rounded-full border border-border shrink-0"
-                            style={{ backgroundColor: color }}
-                          />
-                        )}
-                        <span>{colorName || color}</span>
-                      </span>
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center gap-2 text-sm flex-wrap">
+                      <Badge variant="secondary" className="font-semibold text-xs bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/25">
+                        Variant
+                      </Badge>
+                      {variantWeight && (
+                        <span
+                          className="inline-flex items-center rounded bg-purple-100/80 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800/80 px-2 py-0.5 text-xs font-medium"
+                          title={`Variant Weight: ${variantWeight}`}
+                        >
+                          Weight: {variantWeight}
+                        </span>
+                      )}
+                      {(color || colorName) && (
+                        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                          {color && (
+                            <span
+                              className="inline-block w-3 h-3 rounded-full border border-border shrink-0"
+                              style={{ backgroundColor: color }}
+                            />
+                          )}
+                          <span>{[colorName, color].filter(Boolean).join(" - ")}</span>
+                        </span>
+                      )}
+                    </div>
+                    {baseProductName && baseProductName !== currentDisplayName && (
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <span className="font-medium">Base Product:</span>
+                        <span>{baseProductName}</span>
+                      </div>
                     )}
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Badge variant="outline" className="font-normal text-xs">
+                  <div className="flex items-center gap-2 text-sm flex-wrap">
+                    <Badge variant="outline" className="font-medium text-xs bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/25">
                       Base Product
                     </Badge>
+                    {baseWeight && (
+                      <span className="inline-flex items-center rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-xs font-medium">
+                        Weight: {baseWeight}
+                      </span>
+                    )}
                     {(color || colorName) && (
                       <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                         {color && (
@@ -182,7 +237,7 @@ const InventoryDetails = () => {
                             style={{ backgroundColor: color }}
                           />
                         )}
-                        <span>{colorName || color}</span>
+                        <span>{[colorName, color].filter(Boolean).join(" - ")}</span>
                       </span>
                     )}
                   </div>
@@ -210,9 +265,10 @@ const InventoryDetails = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 md:gap-8">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 md:gap-8 shrink-0">
               <Detail label="Qty on Hand" value={inventory.quantity_on_hand} />
               <Detail label="Threshold" value={inventory.low_stock_threshold} />
+              <Detail label="Weight / Volume" value={currentWeight || "—"} />
               <Detail
                 label="Last Restocked"
                 value={
