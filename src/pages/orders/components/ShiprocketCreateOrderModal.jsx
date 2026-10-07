@@ -9,6 +9,9 @@ import {
   AlertCircle,
   Send,
   Zap,
+  Warehouse,
+  MapPin,
+  CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -95,7 +98,7 @@ export const ShiprocketCreateOrderModal = ({
     } else {
       const val = Number(formData.weight);
       if (isNaN(val) || val <= 0) {
-        newErrors.weight = "Weight must be greater than 0 kg";
+        newErrors.weight = "Weight must be > 0 kg";
       }
     }
 
@@ -105,17 +108,17 @@ export const ShiprocketCreateOrderModal = ({
     } else {
       const val = Number(formData.length);
       if (isNaN(val) || val <= 0) {
-        newErrors.length = "Length must be greater than 0 cm";
+        newErrors.length = "Length must be > 0 cm";
       }
     }
 
     // 3. Breadth Validation
     if (!formData.breadth || String(formData.breadth).trim() === "") {
-      newErrors.breadth = "Breadth / Width is required";
+      newErrors.breadth = "Breadth is required";
     } else {
       const val = Number(formData.breadth);
       if (isNaN(val) || val <= 0) {
-        newErrors.breadth = "Breadth / Width must be greater than 0 cm";
+        newErrors.breadth = "Breadth must be > 0 cm";
       }
     }
 
@@ -125,7 +128,7 @@ export const ShiprocketCreateOrderModal = ({
     } else {
       const val = Number(formData.height);
       if (isNaN(val) || val <= 0) {
-        newErrors.height = "Height must be greater than 0 cm";
+        newErrors.height = "Height must be > 0 cm";
       }
     }
 
@@ -202,39 +205,47 @@ export const ShiprocketCreateOrderModal = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden sm:rounded-xl">
+      <DialogContent className="max-w-2xl sm:max-w-[680px] max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden sm:rounded-2xl border border-border/80 shadow-2xl bg-card">
         {/* Header */}
-        <DialogHeader className="p-5 pb-3.5 border-b bg-muted/30 shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <Box className="h-5 w-5" />
-            </div>
-            <div>
-              <DialogTitle className="text-base font-semibold">
-                Package Details for Shiprocket
-              </DialogTitle>
-              <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                Exact package dimensions and weight for this shipment.
-              </DialogDescription>
+        <DialogHeader className="p-5 pb-3.5 border-b bg-muted/20 shrink-0">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-500/20">
+                <Box className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold tracking-tight text-foreground">
+                  Package Details for Shiprocket
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                  Exact package dimensions and dead weight for this shipment.
+                </DialogDescription>
+              </div>
             </div>
           </div>
 
-          {/* Quick info banner */}
-          <div className="mt-3 p-2.5 rounded-lg bg-background/80 border text-[11px] flex justify-between items-center">
-            <div>
-              <span className="text-muted-foreground block text-[10px]">Order</span>
-              <span className="font-semibold">
+          {/* Quick Info Summary Bar */}
+          <div className="mt-3.5 p-2.5 rounded-xl bg-muted/40 dark:bg-muted/15 border border-border/70 text-xs grid grid-cols-3 gap-2">
+            <div className="space-y-0.5">
+              <span className="text-muted-foreground block text-[10px] uppercase font-semibold tracking-wider">Order</span>
+              <span className="font-mono font-bold text-foreground">
                 {order?.orderNumber || order?.orderId || `#${orderId?.slice(-6)}`}
               </span>
             </div>
-            <div>
-              <span className="text-muted-foreground block text-[10px]">Pickup Location</span>
+            <div className="space-y-0.5">
+              <span className="text-muted-foreground block text-[10px] uppercase font-semibold tracking-wider flex items-center gap-1">
+                <Warehouse className="h-2.5 w-2.5 text-violet-500" />
+                Pickup Location
+              </span>
               <span className="font-medium text-foreground">Shagun Beauty</span>
             </div>
-            <div>
-              <span className="text-muted-foreground block text-[10px]">Destination</span>
-              <span className="font-medium text-foreground">
-                {order?.address?.city || order?.address?.state || "India"}
+            <div className="space-y-0.5">
+              <span className="text-muted-foreground block text-[10px] uppercase font-semibold tracking-wider flex items-center gap-1">
+                <MapPin className="h-2.5 w-2.5 text-rose-500" />
+                Destination
+              </span>
+              <span className="font-medium text-foreground truncate block">
+                {order?.address?.city || order?.address?.state || order?.shippingAddress?.city || "Customer Address"}
               </span>
             </div>
           </div>
@@ -244,19 +255,21 @@ export const ShiprocketCreateOrderModal = ({
         <form onSubmit={onSubmit} className="flex-1 overflow-y-auto flex flex-col justify-between">
           <div className="p-5 space-y-4 text-xs">
             {/* 3D Box Dimensions Visual Guide */}
-            <div className="p-3.5 rounded-xl bg-muted/30 border space-y-2.5">
+            <div className="p-3.5 rounded-xl bg-muted/30 dark:bg-muted/10 border border-border/70 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                  <Ruler className="h-3.5 w-3.5 text-primary" />
+                  <Ruler className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
                   Box Dimensions Illustration
                 </span>
-                <span className="text-[10px] text-muted-foreground">Dimensions in centimeters (cm)</span>
+                <span className="text-[10px] text-muted-foreground font-medium bg-background px-2 py-0.5 rounded border">
+                  In centimeters (cm)
+                </span>
               </div>
 
               {/* 3D Box Diagram Graphic */}
-              <div className="relative flex flex-col md:flex-row items-center justify-center gap-4 bg-background p-3.5 rounded-lg border">
-                {/* SVG Isometric Box Illustration with Direct On-Box Labels */}
-                <div className="relative w-52 h-36 flex items-center justify-center shrink-0">
+              <div className="relative flex flex-col sm:flex-row items-center justify-center gap-4 bg-background/90 p-3 rounded-lg border">
+                {/* SVG Isometric Box Illustration */}
+                <div className="relative w-48 h-32 flex items-center justify-center shrink-0">
                   <svg viewBox="0 0 240 180" className="w-full h-full drop-shadow-xs">
                     <defs>
                       <marker id="arrow-blue-c" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
@@ -306,7 +319,7 @@ export const ShiprocketCreateOrderModal = ({
                       SIDE
                     </text>
 
-                    {/* 1. LENGTH Dimension Line & Label (Blue) */}
+                    {/* 1. LENGTH Dimension Line (Blue) */}
                     <line
                       x1="32"
                       y1="124"
@@ -322,7 +335,7 @@ export const ShiprocketCreateOrderModal = ({
                       Length (L)
                     </text>
 
-                    {/* 2. WIDTH / BREADTH Dimension Line & Label (Green) */}
+                    {/* 2. WIDTH / BREADTH Dimension Line (Green) */}
                     <line
                       x1="118"
                       y1="154"
@@ -335,10 +348,10 @@ export const ShiprocketCreateOrderModal = ({
                     />
                     <rect x="124" y="146" width="68" height="18" rx="4" fill="#059669" />
                     <text x="158" y="159" textAnchor="middle" fontSize="9.5" fill="#ffffff" fontWeight="bold">
-                      Width / B (W)
+                      Breadth (B)
                     </text>
 
-                    {/* 3. HEIGHT Dimension Line & Label (Purple) */}
+                    {/* 3. HEIGHT Dimension Line (Purple) */}
                     <line
                       x1="192"
                       y1="55"
@@ -356,206 +369,185 @@ export const ShiprocketCreateOrderModal = ({
                   </svg>
                 </div>
 
-                {/* Dimension Legend Badges */}
-                <div className="space-y-2 flex-1 text-[11px] w-full">
-                  {/* Length Legend */}
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 text-blue-950 dark:text-blue-200">
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className="h-2 w-2 rounded-full bg-blue-600 shrink-0" />
-                        <span className="font-bold">Length (L)</span>
-                      </div>
-                      <span className="text-[10px] text-muted-foreground block">
-                        Front horizontal length
-                      </span>
+                {/* Live Dimension Badges */}
+                <div className="space-y-1.5 flex-1 text-[11px] w-full">
+                  {/* Length */}
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900">
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-blue-600 shrink-0" />
+                      <span className="font-semibold text-blue-950 dark:text-blue-200">Length (L)</span>
                     </div>
                     <span className="font-mono font-bold text-xs bg-blue-100 dark:bg-blue-900/60 px-2 py-0.5 rounded text-blue-800 dark:text-blue-300">
-                      {formData.length ? `${formData.length} cm` : "—"}
+                      {formData.length ? `${formData.length} cm` : "0 cm"}
                     </span>
                   </div>
 
-                  {/* Breadth / Width Legend */}
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 text-emerald-950 dark:text-emerald-200">
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className="h-2 w-2 rounded-full bg-emerald-600 shrink-0" />
-                        <span className="font-bold">Width / Breadth (W/B)</span>
-                      </div>
-                      <span className="text-[10px] text-muted-foreground block">
-                        Side horizontal width & depth
-                      </span>
+                  {/* Breadth */}
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-900">
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-emerald-600 shrink-0" />
+                      <span className="font-semibold text-emerald-950 dark:text-emerald-200">Breadth (B)</span>
                     </div>
                     <span className="font-mono font-bold text-xs bg-emerald-100 dark:bg-emerald-900/60 px-2 py-0.5 rounded text-emerald-800 dark:text-emerald-300">
-                      {formData.breadth ? `${formData.breadth} cm` : "—"}
+                      {formData.breadth ? `${formData.breadth} cm` : "0 cm"}
                     </span>
                   </div>
 
-                  {/* Height Legend */}
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-violet-50/80 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-900 text-violet-950 dark:text-violet-200">
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className="h-2 w-2 rounded-full bg-violet-600 shrink-0" />
-                        <span className="font-bold">Height (H)</span>
-                      </div>
-                      <span className="text-[10px] text-muted-foreground block">
-                        Vertical height (top to bottom)
-                      </span>
+                  {/* Height */}
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-violet-50/80 dark:bg-violet-950/40 border border-violet-200/80 dark:border-violet-900">
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-violet-600 shrink-0" />
+                      <span className="font-semibold text-violet-950 dark:text-violet-200">Height (H)</span>
                     </div>
                     <span className="font-mono font-bold text-xs bg-violet-100 dark:bg-violet-900/60 px-2 py-0.5 rounded text-violet-800 dark:text-violet-300">
-                      {formData.height ? `${formData.height} cm` : "—"}
+                      {formData.height ? `${formData.height} cm` : "0 cm"}
                     </span>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Input Fields Section */}
-            <div className="space-y-3">
-              {/* 1. Weight Field */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="pkg-weight" className="text-xs font-semibold flex items-center gap-1.5">
-                    <Scale className="h-3.5 w-3.5 text-primary" />
-                    Package Weight (kg)
+            {/* Inputs Section: 4-Column Balanced Grid */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <Scale className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                  Package Weight & Dimensions
+                </span>
+                <span className="text-[10px] text-muted-foreground">All 4 fields required</span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {/* 1. Weight Field */}
+                <div className="space-y-1">
+                  <Label htmlFor="pkg-weight" className="text-[11px] font-semibold text-foreground flex items-center justify-between">
+                    <span>Weight (KG)</span>
                     <span className="text-rose-500">*</span>
                   </Label>
-                  <span className="text-[10px] text-muted-foreground">Dead weight in KG</span>
+                  <Input
+                    id="pkg-weight"
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    placeholder="e.g. 5"
+                    value={formData.weight}
+                    onChange={(e) => handleChange("weight", e.target.value)}
+                    className={cn(
+                      "h-8.5 text-xs font-mono bg-background border-border/80 focus-visible:ring-1 focus-visible:ring-violet-500",
+                      errors.weight && "border-rose-500 focus-visible:ring-rose-500"
+                    )}
+                    disabled={isCreating}
+                    autoFocus
+                  />
+                  {errors.weight && (
+                    <p className="text-[10px] text-rose-500 font-medium">{errors.weight}</p>
+                  )}
                 </div>
-                <Input
-                  id="pkg-weight"
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  placeholder="e.g. 5"
-                  value={formData.weight}
-                  onChange={(e) => handleChange("weight", e.target.value)}
-                  className={cn("h-9 text-xs font-mono", errors.weight && "border-rose-500 ring-rose-500/20")}
-                  disabled={isCreating}
-                  autoFocus
-                />
-                {errors.weight && (
-                  <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1">
-                    <AlertCircle className="h-3 w-3" />
-                    {errors.weight}
-                  </p>
-                )}
-              </div>
 
-              {/* 2. Package Dimensions (Length, Breadth, Height) */}
-              <div className="space-y-1.5 pt-1">
-                <div className="grid grid-cols-3 gap-2.5">
-                  {/* Length */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="pkg-length" className="text-[11px] font-semibold text-blue-700 dark:text-blue-400 flex items-center gap-1">
-                        <span className="h-1.5 w-1.5 rounded-full bg-blue-600" />
-                        Length (cm) *
-                      </Label>
-                    </div>
-                    <Input
-                      id="pkg-length"
-                      type="number"
-                      step="0.1"
-                      min="0.1"
-                      placeholder="e.g. 20"
-                      value={formData.length}
-                      onChange={(e) => handleChange("length", e.target.value)}
-                      className={cn("h-9 text-xs font-mono border-blue-200 dark:border-blue-900", errors.length && "border-rose-500 ring-rose-500/20")}
-                      disabled={isCreating}
-                    />
-                    {errors.length ? (
-                      <p className="text-[10px] text-rose-500 font-medium">{errors.length}</p>
-                    ) : (
-                      <span className="text-[10px] text-muted-foreground block">Front length</span>
+                {/* 2. Length Field */}
+                <div className="space-y-1">
+                  <Label htmlFor="pkg-length" className="text-[11px] font-semibold text-blue-700 dark:text-blue-400 flex items-center justify-between">
+                    <span>Length (CM)</span>
+                    <span className="text-rose-500">*</span>
+                  </Label>
+                  <Input
+                    id="pkg-length"
+                    type="number"
+                    step="0.1"
+                    min="0.1"
+                    placeholder="e.g. 20"
+                    value={formData.length}
+                    onChange={(e) => handleChange("length", e.target.value)}
+                    className={cn(
+                      "h-8.5 text-xs font-mono bg-background border-border/80 focus-visible:ring-1 focus-visible:ring-blue-500",
+                      errors.length && "border-rose-500 focus-visible:ring-rose-500"
                     )}
-                  </div>
+                    disabled={isCreating}
+                  />
+                  {errors.length && (
+                    <p className="text-[10px] text-rose-500 font-medium">{errors.length}</p>
+                  )}
+                </div>
 
-                  {/* Breadth / Width */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="pkg-breadth" className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-                        Breadth (cm) *
-                      </Label>
-                    </div>
-                    <Input
-                      id="pkg-breadth"
-                      type="number"
-                      step="0.1"
-                      min="0.1"
-                      placeholder="e.g. 30"
-                      value={formData.breadth}
-                      onChange={(e) => handleChange("breadth", e.target.value)}
-                      className={cn("h-9 text-xs font-mono border-emerald-200 dark:border-emerald-900", errors.breadth && "border-rose-500 ring-rose-500/20")}
-                      disabled={isCreating}
-                    />
-                    {errors.breadth ? (
-                      <p className="text-[10px] text-rose-500 font-medium">{errors.breadth}</p>
-                    ) : (
-                      <span className="text-[10px] text-muted-foreground block">Side width</span>
+                {/* 3. Breadth Field */}
+                <div className="space-y-1">
+                  <Label htmlFor="pkg-breadth" className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 flex items-center justify-between">
+                    <span>Breadth (CM)</span>
+                    <span className="text-rose-500">*</span>
+                  </Label>
+                  <Input
+                    id="pkg-breadth"
+                    type="number"
+                    step="0.1"
+                    min="0.1"
+                    placeholder="e.g. 30"
+                    value={formData.breadth}
+                    onChange={(e) => handleChange("breadth", e.target.value)}
+                    className={cn(
+                      "h-8.5 text-xs font-mono bg-background border-border/80 focus-visible:ring-1 focus-visible:ring-emerald-500",
+                      errors.breadth && "border-rose-500 focus-visible:ring-rose-500"
                     )}
-                  </div>
+                    disabled={isCreating}
+                  />
+                  {errors.breadth && (
+                    <p className="text-[10px] text-rose-500 font-medium">{errors.breadth}</p>
+                  )}
+                </div>
 
-                  {/* Height */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="pkg-height" className="text-[11px] font-semibold text-violet-700 dark:text-violet-400 flex items-center gap-1">
-                        <span className="h-1.5 w-1.5 rounded-full bg-violet-600" />
-                        Height (cm) *
-                      </Label>
-                    </div>
-                    <Input
-                      id="pkg-height"
-                      type="number"
-                      step="0.1"
-                      min="0.1"
-                      placeholder="e.g. 30"
-                      value={formData.height}
-                      onChange={(e) => handleChange("height", e.target.value)}
-                      className={cn("h-9 text-xs font-mono border-violet-200 dark:border-violet-900", errors.height && "border-rose-500 ring-rose-500/20")}
-                      disabled={isCreating}
-                    />
-                    {errors.height ? (
-                      <p className="text-[10px] text-rose-500 font-medium">{errors.height}</p>
-                    ) : (
-                      <span className="text-[10px] text-muted-foreground block">Top to bottom</span>
+                {/* 4. Height Field */}
+                <div className="space-y-1">
+                  <Label htmlFor="pkg-height" className="text-[11px] font-semibold text-violet-700 dark:text-violet-400 flex items-center justify-between">
+                    <span>Height (CM)</span>
+                    <span className="text-rose-500">*</span>
+                  </Label>
+                  <Input
+                    id="pkg-height"
+                    type="number"
+                    step="0.1"
+                    min="0.1"
+                    placeholder="e.g. 30"
+                    value={formData.height}
+                    onChange={(e) => handleChange("height", e.target.value)}
+                    className={cn(
+                      "h-8.5 text-xs font-mono bg-background border-border/80 focus-visible:ring-1 focus-visible:ring-violet-500",
+                      errors.height && "border-rose-500 focus-visible:ring-rose-500"
                     )}
-                  </div>
+                    disabled={isCreating}
+                  />
+                  {errors.height && (
+                    <p className="text-[10px] text-rose-500 font-medium">{errors.height}</p>
+                  )}
                 </div>
               </div>
+            </div>
 
-              {/* Calculated Weight Summary Box */}
-              {(deadWeight > 0 || volumetricWeight > 0) && (
-                <div className="mt-2 p-3 rounded-lg bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 space-y-1.5">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-amber-800 dark:text-amber-300 font-medium flex items-center gap-1">
-                      <Zap className="h-3 w-3 text-amber-600 dark:text-amber-400" />
-                      Volumetric Weight:
-                    </span>
-                    <span className="font-mono font-semibold text-amber-900 dark:text-amber-200">
-                      ({numLength || 0} × {numBreadth || 0} × {numHeight || 0}) / 5000 = {volumetricWeight} KG
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs pt-1 border-t border-amber-200/60 dark:border-amber-900/60 font-bold">
-                    <span className="text-amber-900 dark:text-amber-200">
-                      Applicable / Chargeable Weight:
-                    </span>
-                    <span className="font-mono text-sm text-primary">
-                      {applicableWeight} KG
-                    </span>
-                  </div>
-                </div>
-              )}
+            {/* Live Calculated Weight Summary Bar */}
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-zinc-900/60 border border-border/70 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2 text-xs">
+                <Zap className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                <span className="text-muted-foreground">
+                  Volumetric: <strong className="font-mono text-foreground">{volumetricWeight} KG</strong>
+                  {numLength > 0 && numBreadth > 0 && numHeight > 0 && (
+                    <span className="text-[10px] text-muted-foreground/80 font-mono"> ({numLength}×{numBreadth}×{numHeight}/5000)</span>
+                  )}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                <span className="text-[11px] text-muted-foreground font-medium">Applicable:</span>
+                <Badge variant="outline" className="h-5 px-2 text-[11px] font-mono font-bold bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300 border-violet-200 dark:border-violet-800">
+                  {applicableWeight} KG
+                </Badge>
+              </div>
             </div>
           </div>
 
           {/* Footer */}
-          <DialogFooter className="p-4 border-t bg-muted/20 flex flex-row items-center justify-end gap-2 shrink-0">
+          <DialogFooter className="p-4 border-t bg-muted/20 flex flex-row items-center justify-end gap-2.5 shrink-0">
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="h-8 text-xs"
+              className="h-8.5 text-xs px-4"
               onClick={() => onOpenChange(false)}
               disabled={isCreating}
             >
@@ -564,7 +556,7 @@ export const ShiprocketCreateOrderModal = ({
             <Button
               type="submit"
               size="sm"
-              className="h-8 text-xs font-semibold gap-1.5 min-w-[150px]"
+              className="h-8.5 text-xs font-semibold gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white min-w-[170px] shadow-sm shadow-violet-500/25"
               disabled={isCreating}
             >
               {isCreating ? (
@@ -587,3 +579,4 @@ export const ShiprocketCreateOrderModal = ({
 };
 
 export default ShiprocketCreateOrderModal;
+
