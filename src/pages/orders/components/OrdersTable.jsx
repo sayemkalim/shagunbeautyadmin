@@ -24,7 +24,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Banknote, QrCode, RotateCcw, CheckCircle2, XCircle } from "lucide-react";
+import { Banknote, QrCode, RotateCcw, CheckCircle2, XCircle, Package } from "lucide-react";
 import { fetchOrders } from "../helpers/fetchOrders";
 import { updateOrderStatus } from "../helpers/updateOrderStatus";
 import { bulkUpdateOrderStatus } from "../helpers/bulkUpdateOrderStatus";
@@ -458,6 +458,22 @@ const OrdersTable = ({
                     {row.refundTo && <div>To: {row.refundTo}</div>}
                   </TooltipContent>
                 </Tooltip>
+              )}
+              {Boolean(row?.shipping?.shiprocketOrderId || row?.shipping?.shipmentId) && (
+                <Badge
+                  variant="outline"
+                  className="w-fit text-[10px] px-1.5 py-0 font-medium border-violet-200 bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-800 flex items-center gap-1"
+                  title={`Shiprocket Order ID: ${row.shipping?.shiprocketOrderId || 'Created'}${row.shipping?.awbCode ? ` • AWB: ${row.shipping.awbCode}` : ''}`}
+                >
+                  <Package className="h-2.5 w-2.5" />
+                  <span>
+                    {row.shipping?.status
+                      ? row.shipping.status === "created"
+                        ? "Shiprocket Created"
+                        : row.shipping.status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+                      : "Shiprocket Created"}
+                  </span>
+                </Badge>
               )}
             </div>
           </div>

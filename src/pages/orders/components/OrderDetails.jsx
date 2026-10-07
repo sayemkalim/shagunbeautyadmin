@@ -58,6 +58,7 @@ import { getStatusBadgeClass, formatOrderStatus, formatRefundMode, formatRefundS
 import { isOrderCOD } from "../helpers/isOrderCOD";
 import InlineRefundCard from "./InlineRefundCard";
 import RefundModal from "./RefundModal";
+import ShiprocketCard from "./ShiprocketCard";
 import { ORDER_STATUS_VALUES } from "@/constant";
 import { cn } from "@/lib/utils";
 
@@ -1972,7 +1973,10 @@ const OrderDetails = () => {
 
 
           {/* Logistics & Tracking Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Shiprocket Logistics */}
+            <ShiprocketCard order={order} onOrderUpdated={refetchOrderData} />
+
             {/* Shipping Details */}
             <Card className="border shadow-xs">
               <CardHeader className="pb-3 border-b bg-muted/20">

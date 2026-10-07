@@ -12,16 +12,17 @@ export const updateOrder = async ({
   addBundles = [], 
   removeProducts = [],
   removeBundles = [],
-  shippingCost 
+  shippingCost,
+  shippingDetails,
+  packageData,
+  package: pkg,
 }) => {
   try {
-    // Status is required by the API
-    if (!status) {
-      throw new Error("Status is required for order updates");
-    }
+    // Status is required by the API (fallback to current or "pending" if not provided)
+    const orderStatus = status || "pending";
 
     const updateData = {
-      status, // Always include status as it's required
+      status: orderStatus,
     };
 
     if (codPaymentMethod) {
@@ -36,6 +37,46 @@ export const updateOrder = async ({
     // Add shipping cost if provided
     if (shippingCost !== undefined) {
       updateData.shippingCost = shippingCost;
+    }
+
+    // Persist package dimensions to shippingDetails.package
+    const packageToPersist = packageData || pkg || shippingDetails?.package;
+    if (packageToPersist) {
+      const numWeight = parseFloat(packageToPersist.weight);
+      const numLength = parseFloat(packageToPersist.length);
+      const numBreadth = parseFloat(packageToPersist.breadth ?? packageToPersist.width);
+      const numHeight = parseFloat(packageToPersist.height);
+
+      const isValid =
+        !isNaN(numWeight) && numWeight > 0 &&
+        !isNaN(numLength) && numLength > 0 &&
+        !isNaN(numBreadth) && numBreadth > 0 &&
+        !isNaN(numHeight) && numHeight > 0;
+
+      if (isValid) {
+        const formattedPkg = {
+          weight: numWeight,
+          length: numLength,
+          breadth: numBreadth,
+          height: numHeight,
+        };
+
+        console.log("PACKAGE DATA BEFORE SAVE", {
+          weight: formattedPkg.weight,
+          length: formattedPkg.length,
+          breadth: formattedPkg.breadth,
+          height: formattedPkg.height,
+        });
+
+        updateData.shippingDetails = {
+          ...(shippingDetails || {}),
+          package: formattedPkg,
+        };
+      } else if (shippingDetails) {
+        updateData.shippingDetails = shippingDetails;
+      }
+    } else if (shippingDetails) {
+      updateData.shippingDetails = shippingDetails;
     }
     
     // Add products if provided (for updating existing products)
@@ -96,3 +137,15 @@ export const updateOrder = async ({
     throw error;
   }
 };
+
+/**
+ * Persists package dimensions (weight, length, breadth, height) to order.shippingDetails.package
+ */
+export const saveOrderPackage = async ({ orderId, status = "pending", packageData }) => {
+  return updateOrder({
+    orderId,
+    status,
+    packageData,
+  });
+};
+

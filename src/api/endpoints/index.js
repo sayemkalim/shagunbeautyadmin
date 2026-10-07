@@ -19,6 +19,9 @@ export const endpoints = {
   contact: "api/contact-us",
   //order
   order: "api/order",
+  shiprocket_create: (id) => `api/order/${id}/shiprocket/create`,
+  shiprocket_serviceability: (id) => `api/order/${id}/shiprocket/serviceability`,
+  shiprocket_assign_awb: (id) => `api/order/${id}/shiprocket/assign-awb`,
   generate_payment_link: "api/order/generate-payment-link",
   bulk_order_status: "api/order/bulk-status",
   order_bill: "api/order",
