@@ -55,4 +55,11 @@ export const endpoints = {
   card_banner_heading: "api/card-banner/heading",
   //marquee
   marquee: "api/marquee",
+  //cod settings
+  cod_settings: "api/settings/cod",
+  cod_check: "api/settings/cod/check",
+  //delivery settings
+  delivery_settings: "api/settings/delivery",
+  //deal & flash sale campaigns
+  deal_campaign: "api/deal-campaign",
 };

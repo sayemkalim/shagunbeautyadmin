@@ -49,6 +49,9 @@ import SuperEditor from "@/pages/super-admin/components/super-admin_editor";
 import Inventory from "@/pages/inventory";
 import InventoryDetails from "@/pages/inventory/components/inventory_details";
 import StockHistory from "@/pages/inventory/components/stock_history";
+import CodSettings from "@/pages/cod_settings";
+import DeliverySettings from "@/pages/delivery_settings";
+import DealCampaigns from "@/pages/deal_campaigns";
 
 const Router = () => {
   return (
@@ -126,10 +129,19 @@ const Router = () => {
           <Route path="/dashboard/shipment-zones/add" element={<ShipmentZoneEditor />} />
           <Route path="/dashboard/shipment-zones/edit/:id" element={<ShipmentZoneEditor />} />
           <Route path="/dashboard/shipment-zones/:id" element={<ShipmentZoneDetails />} />
+          {/* Delivery Fee Settings Route */}
+          <Route path="/dashboard/delivery-settings" element={<DeliverySettings />} />
+          {/* COD Settings Route */}
+          <Route path="/dashboard/cod-settings" element={<CodSettings />} />
           {/* Coupons Routes */}
           <Route path="/dashboard/coupons" element={<Coupons />} />
           <Route path="/dashboard/coupons/add" element={<CouponEditor />} />
           <Route path="/dashboard/coupons/edit/:id" element={<CouponEditor />} />
+          {/* Deal & Flash Sale Campaigns Routes */}
+          <Route path="/dashboard/deal-campaigns" element={<DealCampaigns />} />
+          <Route path="/dashboard/deal-campaign" element={<Navigate to="/dashboard/deal-campaigns" replace />} />
+          <Route path="/dashboard/flash-sales" element={<Navigate to="/dashboard/deal-campaigns" replace />} />
+          <Route path="/dashboard/flash-sale" element={<Navigate to="/dashboard/deal-campaigns" replace />} />
           {/* Banners Routes */}
           <Route path="/dashboard/banners" element={<Banners />} />
           <Route path="/dashboard/banners/add" element={<BannerEditor />} />

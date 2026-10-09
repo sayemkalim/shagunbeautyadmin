@@ -735,14 +735,16 @@ const OrderDetails = () => {
   const originalItemsTotal = calculateOriginalItemsTotal();
   const discountedItemsTotal = calculateDiscountedItemsTotal();
   const productDiscount = Math.max(0, originalItemsTotal - discountedItemsTotal);
-  const couponDiscount = Number(order?.couponDiscountAmount || 0);
+  const couponDiscount = Number(order?.couponDiscountAmount || order?.coupon_discount || order?.couponDiscount || 0);
+  const codCharge = Number(order?.cod_charge || order?.codCharge || order?.cod_extra_charge || order?.codExtraCharge || 0);
+  const deliveryFee = Number(order?.delivery_fee || order?.deliveryFee || 0);
 
   // Calculate totals
   const calculateTotal = () => {
     if (!hasChanges && !shippingCostChanged && order?.finalTotalAmount !== undefined && order?.finalTotalAmount !== null) {
       return Number(order.finalTotalAmount);
     }
-    return Math.max(0, discountedItemsTotal - couponDiscount) + (shippingCost || 0);
+    return Math.max(0, discountedItemsTotal - couponDiscount) + (shippingCost || 0) + (codCharge || 0);
   };
 
   const finalTotal = calculateTotal();
@@ -1221,6 +1223,31 @@ const OrderDetails = () => {
                   </span>
                 </div>
               </div>
+
+              {(couponDiscount > 0 || codCharge > 0) && (
+                <div className="pt-2 border-t grid grid-cols-2 gap-2 text-xs">
+                  {couponDiscount > 0 ? (
+                    <div>
+                      <Typography variant="small" className="text-muted-foreground text-[11px] block">
+                        Coupon Discount
+                      </Typography>
+                      <span className="font-semibold text-[var(--color-success)] text-xs">
+                        −₹{couponDiscount.toFixed(2)}
+                      </span>
+                    </div>
+                  ) : null}
+                  {codCharge > 0 ? (
+                    <div>
+                      <Typography variant="small" className="text-muted-foreground text-[11px] block">
+                        COD Extra Charge
+                      </Typography>
+                      <span className="font-semibold text-xs text-amber-600 dark:text-amber-400">
+                        +₹{codCharge.toFixed(2)}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+              )}
 
               {order.utr_number && (
                 <div className="pt-2 border-t">
@@ -1867,24 +1894,28 @@ const OrderDetails = () => {
               )}
 
               {/* Coupon Discount */}
-              {order.coupon && (
+              {(couponDiscount > 0 || order.coupon) && (
                 <div className="flex justify-between items-start text-sm">
                   <div>
-                    <span className="text-[var(--color-success)] font-medium">Coupon ({order.coupon.code})</span>
-                    <span className="text-muted-foreground text-xs block">
-                      {formatCouponDiscount(order.coupon)}
+                    <span className="text-[var(--color-success)] font-medium">
+                      Coupon {order.coupon?.code ? `(${order.coupon.code})` : (typeof order.coupon === "string" ? `(${order.coupon})` : "")}
                     </span>
+                    {order.coupon && typeof order.coupon === "object" && (
+                      <span className="text-muted-foreground text-xs block">
+                        {formatCouponDiscount(order.coupon)}
+                      </span>
+                    )}
                   </div>
                   <span className="font-semibold text-[var(--color-success)]">
-                    −₹{(order.couponDiscountAmount || 0).toFixed(2)}
+                    −₹{couponDiscount.toFixed(2)}
                   </span>
                 </div>
               )}
 
-              {/* Shipping Cost */}
+              {/* Shipping / Delivery Cost */}
               <div className="flex justify-between items-center text-sm pt-1">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-muted-foreground">Shipping Cost:</span>
+                  <span className="text-muted-foreground">Delivery / Shipping:</span>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1915,7 +1946,9 @@ const OrderDetails = () => {
                   </div>
                 ) : (
                   <div className="flex items-center gap-1">
-                    <span className="font-medium">₹{shippingCost.toFixed(2)}</span>
+                    <span className="font-medium">
+                      {shippingCost === 0 ? "Free (₹0.00)" : `₹${shippingCost.toFixed(2)}`}
+                    </span>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -1927,6 +1960,21 @@ const OrderDetails = () => {
                   </div>
                 )}
               </div>
+
+              {/* COD Extra Handling Charge */}
+              {codCharge > 0 && (
+                <div className="flex justify-between items-center text-sm">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-muted-foreground">COD Handling Charge:</span>
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-medium text-amber-700 bg-amber-50 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300">
+                      Cash on Delivery
+                    </Badge>
+                  </div>
+                  <span className="font-medium text-foreground">
+                    +₹{codCharge.toFixed(2)}
+                  </span>
+                </div>
+              )}
               
               {/* Final Total */}
               <div className="flex justify-between items-center pt-3 border-t">

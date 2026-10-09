@@ -29,7 +29,10 @@ import {
   Mail,
   Truck,
   Ticket,
-  Megaphone
+  Megaphone,
+  Banknote,
+  BadgePercent,
+  Flame,
 } from "lucide-react";
 import { getItem } from "../local_storage";
 const userName = getItem("userName") || "Admin";
@@ -124,6 +127,22 @@ export const data = {
       title: "Shipment Zones",
       url: "/dashboard/shipment-zones",
       icon: Truck,
+      isActive: true,
+      items: [],
+      roles: ["super_admin", "admin"],
+    },
+    {
+      title: "Delivery Settings",
+      url: "/dashboard/delivery-settings",
+      icon: BadgePercent,
+      isActive: true,
+      items: [],
+      roles: ["super_admin", "admin"],
+    },
+    {
+      title: "COD Settings",
+      url: "/dashboard/cod-settings",
+      icon: Banknote,
       isActive: true,
       items: [],
       roles: ["super_admin", "admin"],
@@ -239,6 +258,13 @@ export const data = {
       url: "/dashboard/coupons",
       icon: Ticket,
       roles: ["super_admin","admin"],
+    },
+    {
+      title: "Deal Campaigns",
+      name: "Deal Campaigns",
+      url: "/dashboard/deal-campaigns",
+      icon: Flame,
+      roles: ["super_admin", "admin"],
     },
     // {
     //   title: "Transactions",
